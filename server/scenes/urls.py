@@ -1,6 +1,7 @@
 from django.urls import path
-from . import views
+from .views import SceneCreateView, ping
 
 urlpatterns = [
-    path("ping/", views.ping),
+    path("ping/", ping),
+    path("scenes/", SceneCreateView.as_view()),
 ]
