@@ -124,10 +124,7 @@ export default function SceneViewer({ sceneData }: SceneViewerProps) {
 
         animate()
 
-
-        // -----------------------------------
         // Cleanup
-        // -----------------------------------
 
         return () => {
             cancelAnimationFrame(animationFrameId);
@@ -170,7 +167,7 @@ function buildScene(
     sceneData: SceneData
 ) {
     const wallMaterial = new THREE.MeshStandardMaterial({
-        color: 0xaaaaa,
+        color: 0xaaaaaa,
     })
 
     const furnitureMaterial = new THREE.MeshStandardMaterial({
