@@ -4,27 +4,7 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { ThreeMFLoader } from "three/examples/jsm/Addons.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-
-type SceneObject = {
-    id: string
-    type: string
-    x: number
-    y: number
-    z: number
-    width: number
-    height: number
-    depth: number
-}
-
-type SceneData = {
-    room_size_hint: {
-        width: number
-        height: number
-        depth: number
-    }
-
-    objects: SceneObject[]
-}
+import type { SceneData } from "@/lib/SceneData";
 
 type SceneViewerProps = {
     sceneData: SceneData
