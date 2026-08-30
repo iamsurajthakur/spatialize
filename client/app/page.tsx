@@ -82,7 +82,7 @@ export default function Home() {
       {!sceneData && (
         <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-8 animate-in fade-in duration-700">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-[0_2px_40px_-12px_rgba(0,0,0,0.1)] border border-zinc-200 p-8">
-            
+
             <div className="text-center mb-8">
               <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 mb-2">
                 Spatialize
@@ -96,11 +96,10 @@ export default function Home() {
             <div className="mb-6">
               <label
                 htmlFor="file-upload"
-                className={`relative flex flex-col items-center justify-center w-full h-48 rounded-xl border-2 border-dashed transition-all cursor-pointer overflow-hidden group ${
-                  file
+                className={`relative flex flex-col items-center justify-center w-full h-48 rounded-xl border-2 border-dashed transition-all cursor-pointer overflow-hidden group ${file
                     ? "border-zinc-300 bg-zinc-50"
                     : "border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50"
-                }`}
+                  }`}
               >
                 {previewUrl ? (
                   // Image Selected State
@@ -146,7 +145,7 @@ export default function Home() {
                     </p>
                   </div>
                 )}
-                
+
                 <input
                   id="file-upload"
                   type="file"
@@ -201,14 +200,14 @@ export default function Home() {
             <h2 className="text-white/80 font-medium tracking-wide">
               Spatialize Viewer
             </h2>
-            <button 
+            <button
               onClick={resetState}
               className="pointer-events-auto px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg backdrop-blur-md transition-colors border border-white/10"
             >
               Upload New Image
             </button>
           </div>
-          
+
           <SceneViewer sceneData={sceneData} />
         </div>
       )}
