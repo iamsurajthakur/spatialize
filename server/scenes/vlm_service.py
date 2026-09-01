@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from .schemas import SceneData
+from .validators import validate_scene_json
+
 load_dotenv()
 
 client = genai.Client(
@@ -12,10 +15,7 @@ client = genai.Client(
 )
 
 
-def analyze_image(image_path: str) -> str | None:
-    """
-    Send an image to Gemini and return its raw text response.
-    """
+def analyze_image(image_path: str) -> dict:
 
     path = Path(image_path)
 
@@ -24,18 +24,39 @@ def analyze_image(image_path: str) -> str | None:
     mime_type = get_mime_type(path)
 
     prompt = """
-Act as a spatial geometry analyst. I need to deconstruct this room's layout to eventually build a 3D environment.
+Analyze this indoor room image and produce a coarse 3D scene description.
 
-Please provide a highly literal, plain-language description of the space. Do not use aesthetic or flowery language (e.g., skip words like "cozy," "beautiful," or "messy").
+Rules:
 
-Describe the scene using these specific categories:
-1. Room Type: What kind of room is this?
-2. Structural Inventory: List the major furniture and structural elements (sofa, bed, dining table, doors, windows). Strictly ignore small clutter like books, cups, or plants.
-3. Camera-Relative Positions: Assuming the camera is at the front edge of the room looking in, where is each item located? Use terms like "foreground left," "center," or "background right."
-4. Orientations & Anchors: How are the items rotated or anchored? (e.g., "The back of the sofa is flush against the left wall," "The TV is facing the sofa," "The coffee table is centered directly in front of the sofa").
-5. Relative Scale: Mention if a piece of furniture dominates the room's footprint.
+1. Identify the room type implicitly from the visible scene and estimate
+   reasonable room dimensions.
 
-Output plain text only. Do not return JSON or code.
+2. Detect the major visible furniture and room objects.
+
+3. Only include objects that are useful for recreating the room as a
+   simple stylized 3D scene.
+
+4. Allowed object types are:
+   table, chair, sofa, bed, desk, cabinet, lamp, tv, generic.
+
+5. Use this coordinate convention:
+   - X = left/right
+   - Y = up/down
+   - Z = front/back
+   - room center is (0, 0, 0)
+   - floor is y = 0
+   - x, y, z represent the center of each object's bounding box.
+
+6. Coordinates are coarse layout estimates, not real-world measurements.
+
+7. Keep objects inside or near the room bounds.
+
+8. If an object cannot confidently be assigned one of the known types,
+   use "generic".
+
+9. Do not invent tiny or irrelevant objects.
+
+10. Return only the requested structured data.
 """
 
     response = client.models.generate_content(
@@ -47,9 +68,21 @@ Output plain text only. Do not return JSON or code.
             ),
             prompt,
         ],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=SceneData
+        )
     )
+    
+    raw_data = SceneData.model_validate_json(
+        response.text or ""
+    ).model_dump()
 
-    return response.text
+    validated_data = validate_scene_json(
+        raw_data
+    )
+    
+    return validated_data
 
 
 def get_mime_type(path: Path) -> str:
