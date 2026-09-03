@@ -7,6 +7,7 @@ ALLOWED_TYPES = {
     "sofa",
     "bed",
     "desk",
+    "plant",
     "cabinet",
     "lamp",
     "tv",

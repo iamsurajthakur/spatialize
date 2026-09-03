@@ -7,6 +7,7 @@ ALLOWED_OBJECT_TYPES = Literal[
     "chair",
     "sofa",
     "bed",
+    "plant",
     "desk",
     "cabinet",
     "lamp",
