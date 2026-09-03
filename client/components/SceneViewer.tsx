@@ -2,9 +2,15 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { ThreeMFLoader } from "three/examples/jsm/Addons.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { SceneData } from "@/lib/SceneData";
+import { createBed } from "@/components/generators/bed";
+import { createSofa } from "@/components/generators/sofa";
+import { createDesk } from "@/components/generators/desk";
+import { createChair } from "@/components/generators/chair";
+import { createLamp } from "@/components/generators/lamp";
+import { createPlant } from "@/components/generators/plant";
+
 
 type SceneViewerProps = {
     sceneData: SceneData
@@ -142,16 +148,24 @@ export default function SceneViewer({ sceneData }: SceneViewerProps) {
     )
 }
 
+const generators: Record<
+    string,
+    () => THREE.Group
+> = {
+    bed: createBed,
+    sofa: createSofa,
+    desk: createDesk,
+    chair: createChair,
+  lamp: createLamp,
+    plant: createPlant,
+};
+
 function buildScene(
     scene: THREE.Scene,
     sceneData: SceneData
 ) {
     const wallMaterial = new THREE.MeshStandardMaterial({
         color: 0xaaaaaa,
-    })
-
-    const furnitureMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8b5a2b,
     })
 
     // Room dimenstions
@@ -258,33 +272,39 @@ function buildScene(
     // Objects
 
     for (const object of sceneData.objects) {
-
-        const geometry =
-            new THREE.BoxGeometry(
-                object.width,
-                object.height,
-                object.depth
+    
+        const generator = generators[object.type];
+    
+        if (!generator) {
+            console.warn(
+                `No generator found for object type: ${object.type}`
             );
-
-        const mesh =
-            new THREE.Mesh(
-                geometry,
-                furnitureMaterial
-            );
-
-
-        // grid -> three.js world coordinates
-        // our sample data directly represents world coordinates for now later this function will convert vlm grid coordinates into world space.
-
-        mesh.position.set(
-            object.x,
-            object.y,
-            object.z
-        );
-
-        mesh.name = object.id;
-
-        scene.add(mesh);
+            continue;
+        }
+    
+        const object3D = generator();
+        object3D.position.set(object.x, object.y, object.z);
+        object3D.name = object.id;
+        
+        // Keep the object's real bounding box inside the walls,
+        // no matter how object.x/z were computed upstream
+        const box = new THREE.Box3().setFromObject(object3D);
+        const innerHalfWidth = roomWidth / 2 - 0.1;
+        const innerHalfDepth = roomDepth / 2 - 0.1;
+        
+        const overLeft = -innerHalfWidth - box.min.x;
+        if (overLeft > 0) object3D.position.x += overLeft;
+        
+        const overRight = box.max.x - innerHalfWidth;
+        if (overRight > 0) object3D.position.x -= overRight;
+        
+        const overBack = -innerHalfDepth - box.min.z;
+        if (overBack > 0) object3D.position.z += overBack;
+        
+        const overFront = box.max.z - innerHalfDepth;
+        if (overFront > 0) object3D.position.z -= overFront;
+        
+        scene.add(object3D);
     }
 
     // Lighting
