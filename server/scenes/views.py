@@ -7,10 +7,14 @@ from rest_framework.generics import RetrieveAPIView
 
 from .serializers import SceneSerializer
 from .models import Scene
-from scenes.vlm_service import analyze_image
-from typing import cast
-from .validators import validate_scene_json
 from .vlm_service import analyze_image
+from typing import cast
+import logging
+from .validators import validate_scene_json
+from .geometry_engine import compute_geometry
+from .schemas import SceneGeometryInput
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(["GET"])
@@ -19,10 +23,10 @@ def ping(request):
 
 class SceneCreateView(APIView):
     parser_classes = [MultiPartParser]
-    
+
     def post(self, request):
         serializer = SceneSerializer(data=request.data)
-        
+
         if not serializer.is_valid():
             return Response(
                 serializer.errors,
@@ -36,13 +40,22 @@ class SceneCreateView(APIView):
                 status="processing",
             )
         )
-        
+
         try:
             # Send the uploaded image to Gemini
-            result = analyze_image(scene.image.path)
+            vlm_result = analyze_image(scene.image.path)
 
-            # Validate and clean Gemini's output
-            validated_scene_data = validate_scene_json(result)
+            # Convert to SceneGeometryInput
+            geom_input = SceneGeometryInput(**vlm_result)
+
+            # Convert semantic relations to 3D geometry
+            scene_data_obj = compute_geometry(geom_input)
+
+            # Dump to dict
+            raw_scene_data = scene_data_obj.model_dump()
+
+            # Validate and clean final SceneData
+            validated_scene_data = validate_scene_json(raw_scene_data)
 
             # Save the validated data
             scene.scene_data = validated_scene_data
@@ -55,11 +68,10 @@ class SceneCreateView(APIView):
                 ]
             )
 
-            print("\n========== GEMINI RESPONSE ==========\n")
-            print(validated_scene_data)
-            print("\n=====================================\n")
+            logger.info("Scene %s placed using %s", scene.pk,
+                        validated_scene_data["debug_info"]["floor_mapping"]["method"])
 
-            
+
         except Exception as error:
             scene.status = "failed"
 
@@ -67,8 +79,7 @@ class SceneCreateView(APIView):
                 update_fields=["status"]
             )
 
-            print("\nGemini analysis failed:")
-            print(error)
+            logger.exception("Scene %s analysis/geometry failed: %s", scene.pk, error)
 
             return Response(
                 {
@@ -77,13 +88,12 @@ class SceneCreateView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        
+
         return Response(
             SceneSerializer(scene).data,
             status=status.HTTP_201_CREATED
-        )   
+        )
 
 class SceneDetailView(RetrieveAPIView):
     queryset = Scene.objects.all()
     serializer_class = SceneSerializer
-    

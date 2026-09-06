@@ -1,0 +1,210 @@
+{
+  "room_landmarks": {
+    "back_left_corner": {
+      "x": 0.5,
+      "y": 0.305
+    },
+    "back_right_corner": {
+      "x": 0.783,
+      "y": 0.65
+    },
+    "left_front_floor": null,
+    "right_front_floor": {
+      "x": 0.5,
+      "y": 0.912
+    },
+    "confidence": 0.5,
+    "front_boundary": "visible_floor_extent",
+    "projection_hint": "orthographic"
+  },
+  "objects": [
+    {
+      "id": "bed_1",
+      "type": "bed",
+      "bbox": {
+        "x_min": 0.354,
+        "y_min": 0.269,
+        "x_max": 0.589,
+        "y_max": 0.612
+      },
+      "center": {
+        "x": 0.472,
+        "y": 0.441
+      },
+      "floor_contact": {
+        "x": 0.485,
+        "y": 0.465
+      },
+      "region": "back_center",
+      "wall_relation": {
+        "type": "against_wall",
+        "target": "back_wall"
+      },
+      "relations": [
+        {
+          "type": "beside",
+          "target": "desk_1"
+        }
+      ],
+      "orientation": "parallel_to_back_wall",
+      "support": "floor",
+      "confidence": 0.98
+    },
+    {
+      "id": "desk_1",
+      "type": "desk",
+      "bbox": {
+        "x_min": 0.23,
+        "y_min": 0.422,
+        "x_max": 0.38,
+        "y_max": 0.68
+      },
+      "center": {
+        "x": 0.305,
+        "y": 0.551
+      },
+      "floor_contact": {
+        "x": 0.305,
+        "y": 0.575
+      },
+      "region": "center_left",
+      "wall_relation": {
+        "type": "against_wall",
+        "target": "left_wall"
+      },
+      "relations": [
+        {
+          "type": "left_of",
+          "target": "bed_1"
+        }
+      ],
+      "orientation": "parallel_to_left_wall",
+      "support": "floor",
+      "confidence": 0.98
+    },
+    {
+      "id": "chair_1",
+      "type": "chair",
+      "bbox": {
+        "x_min": 0.301,
+        "y_min": 0.499,
+        "x_max": 0.382,
+        "y_max": 0.685
+      },
+      "center": {
+        "x": 0.341,
+        "y": 0.592
+      },
+      "floor_contact": {
+        "x": 0.345,
+        "y": 0.62
+      },
+      "region": "center_left",
+      "wall_relation": null,
+      "relations": [
+        {
+          "type": "facing",
+          "target": "desk_1"
+        },
+        {
+          "type": "in_front_of",
+          "target": "desk_1"
+        }
+      ],
+      "orientation": "parallel_to_left_wall",
+      "support": "floor",
+      "confidence": 0.95
+    },
+    {
+      "id": "lamp_1",
+      "type": "lamp",
+      "bbox": {
+        "x_min": 0.245,
+        "y_min": 0.366,
+        "x_max": 0.292,
+        "y_max": 0.518
+      },
+      "center": {
+        "x": 0.268,
+        "y": 0.442
+      },
+      "floor_contact": null,
+      "region": "back_left",
+      "wall_relation": null,
+      "relations": [
+        {
+          "type": "near",
+          "target": "desk_1"
+        }
+      ],
+      "orientation": "unknown",
+      "support": "desk_1",
+      "confidence": 0.95
+    },
+    {
+      "id": "sofa_1",
+      "type": "sofa",
+      "bbox": {
+        "x_min": 0.52,
+        "y_min": 0.55,
+        "x_max": 0.72,
+        "y_max": 0.815
+      },
+      "center": {
+        "x": 0.62,
+        "y": 0.682
+      },
+      "floor_contact": {
+        "x": 0.625,
+        "y": 0.71
+      },
+      "region": "front_right",
+      "wall_relation": null,
+      "relations": [
+        {
+          "type": "in_front_of",
+          "target": "plant_1"
+        }
+      ],
+      "orientation": "parallel_to_back_wall",
+      "support": "floor",
+      "confidence": 0.96
+    },
+    {
+      "id": "plant_1",
+      "type": "plant",
+      "bbox": {
+        "x_min": 0.693,
+        "y_min": 0.421,
+        "x_max": 0.778,
+        "y_max": 0.669
+      },
+      "center": {
+        "x": 0.735,
+        "y": 0.545
+      },
+      "floor_contact": {
+        "x": 0.736,
+        "y": 0.635
+      },
+      "region": "center_right",
+      "wall_relation": {
+        "type": "near",
+        "target": "back_wall"
+      },
+      "relations": [
+        {
+          "type": "behind",
+          "target": "sofa_1"
+        }
+      ],
+      "orientation": "unknown",
+      "support": "floor",
+      "confidence": 0.95
+    }
+  ],
+  "image_aspect_ratio": 1.8333333333333333,
+  "analysis_notes": [
+    "Floor refinement failed (ServerError); retained first analysis"
+  ]
+}

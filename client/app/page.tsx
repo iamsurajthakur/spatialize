@@ -208,7 +208,7 @@ export default function Home() {
             </button>
           </div>
 
-          <SceneViewer sceneData={sceneData} />
+          <SceneViewer sceneData={sceneData} sourceImageUrl={previewUrl} />
         </div>
       )}
     </main>

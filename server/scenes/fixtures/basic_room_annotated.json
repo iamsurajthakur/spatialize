@@ -1,0 +1,19 @@
+{
+  "image_aspect_ratio": 1.8334825425,
+  "room_landmarks": {
+    "back_left_corner": {"x": 0.5, "y": 0.40},
+    "back_right_corner": {"x": 0.783, "y": 0.66},
+    "right_front_floor": {"x": 0.5, "y": 0.92},
+    "left_front_floor": {"x": 0.217, "y": 0.66},
+    "confidence": 0.65,
+    "front_boundary": "visible_floor_extent"
+  },
+  "objects": [
+    {"id": "desk_1", "type": "desk", "bbox": {"x_min": 0.23, "y_min": 0.42, "x_max": 0.38, "y_max": 0.68}, "floor_contact": {"x": 0.30, "y": 0.61}, "wall_relation": {"type": "against", "target": "left_wall"}, "confidence": 0.8},
+    {"id": "lamp_1", "type": "lamp", "bbox": {"x_min": 0.24, "y_min": 0.36, "x_max": 0.29, "y_max": 0.52}, "support": "desk_1", "confidence": 0.8},
+    {"id": "chair_1", "type": "chair", "bbox": {"x_min": 0.30, "y_min": 0.49, "x_max": 0.38, "y_max": 0.68}, "floor_contact": {"x": 0.343, "y": 0.664}, "relations": [{"type": "near", "target": "desk_1"}, {"type": "facing", "target": "desk_1"}], "confidence": 0.8},
+    {"id": "bed_1", "type": "bed", "bbox": {"x_min": 0.35, "y_min": 0.27, "x_max": 0.59, "y_max": 0.61}, "floor_contact": {"x": 0.485, "y": 0.535}, "wall_relation": {"type": "against", "target": "back_wall"}, "confidence": 0.8},
+    {"id": "sofa_1", "type": "sofa", "bbox": {"x_min": 0.52, "y_min": 0.55, "x_max": 0.72, "y_max": 0.81}, "floor_contact": {"x": 0.63, "y": 0.738}, "orientation": "parallel_to_right_wall", "confidence": 0.8},
+    {"id": "plant_1", "type": "plant", "bbox": {"x_min": 0.69, "y_min": 0.42, "x_max": 0.78, "y_max": 0.67}, "floor_contact": {"x": 0.735, "y": 0.65}, "confidence": 0.8}
+  ]
+}
