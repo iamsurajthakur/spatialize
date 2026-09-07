@@ -39,6 +39,9 @@ export function createSceneObject(object: SceneObject): THREE.Group {
   object3D.position.set(object.x, object.y, object.z);
   object3D.name = object.id;
   object3D.userData.sceneObject = true;
+  object3D.traverse((child) => {
+    child.userData.sceneObjectId = object.id;
+  });
   return object3D;
 }
 
@@ -69,13 +72,19 @@ export function buildScene(scene: THREE.Scene, data: SceneData) {
     scene.add(wall);
     return { mesh: wall, axis, sign };
   });
-  for (const object of data.objects) scene.add(createSceneObject(object));
+  const objects = new Map<string, THREE.Group>();
+  for (const object of data.objects) {
+    const mesh = createSceneObject(object);
+    objects.set(object.id, mesh);
+    scene.add(mesh);
+  }
   scene.add(new THREE.AmbientLight(0xffffff, 1.6));
   const light = new THREE.DirectionalLight(0xffffff, 2.5);
   light.position.set(3, 8, 5);
   scene.add(light);
 
   return {
+    objects,
     updateWalls(camera: THREE.Camera) {
       for (const { mesh, axis, sign } of walls) {
         const value = axis === "x" ? camera.position.x : camera.position.z;

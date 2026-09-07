@@ -3,6 +3,8 @@ export const COORDINATE_CONVENTION = "floor_center_y_up_positive_z_front_v1";
 export type RoomDimensions = { width: number; height: number; depth: number };
 export type Position = { x: number; y: number; z: number };
 export type ImagePoint = { x: number; y: number };
+export type ManualTransform = { x: number; z: number; rotation_y: number };
+export type ManualOverrides = Record<string, ManualTransform>;
 
 export type SceneObject = Position &
   RoomDimensions & {

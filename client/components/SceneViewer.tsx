@@ -3,20 +3,40 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { SceneData } from "@/lib/SceneData";
+import type { ManualOverrides, SceneData } from "@/lib/SceneData";
 import { buildScene, createSceneCamera, disposeScene, type ViewMode } from "@/lib/sceneBuilder";
+
+import {
+  createSceneEditor,
+  type SceneEditor,
+  type Selection,
+  type EditMode,
+} from "@/lib/sceneEditor";
+import { useManualOverrides } from "@/lib/useManualOverrides";
+import SceneEditPanel from "./SceneEditPanel";
+
+const EMPTY_OVERRIDES: ManualOverrides = {};
 
 export default function SceneViewer({
   sceneData,
   sourceImageUrl,
+  sceneId,
+  manualOverrides = EMPTY_OVERRIDES,
 }: {
   sceneData: SceneData;
+  sceneId?: number;
+  manualOverrides?: ManualOverrides;
   sourceImageUrl?: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<ViewMode>("source");
   const [showDebug, setShowDebug] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const editorRef = useRef<SceneEditor | null>(null);
+  const selectionRef = useRef<string | null>(null);
+  const [selection, setSelection] = useState<Selection>(null);
+  const [editMode, setEditMode] = useState<EditMode>("translate");
+  const { overrides, status, update, save } = useManualOverrides(sceneId, manualOverrides);
   const objectDebug = sceneData.debug_info?.objects;
 
   useEffect(() => {
@@ -32,10 +52,32 @@ export default function SceneViewer({
       target,
       aspect: sourceAspect,
     } = createSceneCamera(sceneData, container.clientWidth / container.clientHeight, mode);
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls(camera);
     controls.target.copy(target);
     controls.enableDamping = true;
     const room = buildScene(scene, sceneData);
+    const editor = sceneId
+      ? createSceneEditor({
+          scene,
+          camera,
+          canvas: renderer.domElement,
+          orbit: controls,
+          data: sceneData,
+          objects: room.objects,
+          overrides: overrides.current,
+          onSelect: (value) => {
+            selectionRef.current = value?.id ?? null;
+            setSelection(value);
+          },
+          onChange: update,
+          onCommit: save,
+          onMode: setEditMode,
+        })
+      : null;
+    editorRef.current = editor;
+    editor?.select(selectionRef.current);
+    // Register TransformControls first so it disables orbit before a gizmo pointerdown.
+    controls.connect(renderer.domElement);
 
     const resize = () => {
       const width = container.clientWidth,
@@ -45,7 +87,9 @@ export default function SceneViewer({
         // Fit the source aspect inside the viewport without stretching its camera.
         const w = Math.min(width, height * sourceAspect),
           h = w / sourceAspect;
-        renderer.setViewport((width - w) / 2, (height - h) / 2, w, h);
+        const viewport = new THREE.Vector4((width - w) / 2, (height - h) / 2, w, h);
+        renderer.setViewport(viewport);
+        editor?.setViewport(viewport);
       } else {
         const aspect = width / height;
         if (camera instanceof THREE.PerspectiveCamera) camera.aspect = aspect;
@@ -63,7 +107,7 @@ export default function SceneViewer({
     let frame: number;
     const animate = () => {
       frame = requestAnimationFrame(animate);
-      controls.update();
+      if (controls.enabled) controls.update();
       room.updateWalls(camera);
       renderer.render(scene, camera);
     };
@@ -71,12 +115,14 @@ export default function SceneViewer({
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
+      editor?.dispose();
+      editorRef.current = null;
       controls.dispose();
       disposeScene(scene);
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, [sceneData, mode]);
+  }, [sceneData, mode, sceneId, overrides, update, save]);
 
   return (
     <div className="h-full w-full flex flex-col pt-20">
@@ -90,6 +136,26 @@ export default function SceneViewer({
             {view === "source" ? "Source view" : view === "top" ? "Top view" : "Overview"}
           </button>
         ))}
+        {sceneId && (
+          <span
+            className="ml-auto self-center text-xs text-zinc-300"
+            role="status"
+            aria-live="polite"
+          >
+            {status === "saving"
+              ? "Saving…"
+              : status === "error"
+                ? "Edits not saved."
+                : status === "editing"
+                  ? "Editing…"
+                  : "All edits saved"}
+            {status === "error" && (
+              <button onClick={() => void save()} className="ml-2 underline text-sky-300">
+                Retry save
+              </button>
+            )}
+          </span>
+        )}
         {objectDebug && (
           <button
             className="px-3 py-1 rounded bg-white/10"
@@ -162,7 +228,24 @@ export default function SceneViewer({
             </div>
           </div>
         )}
-        <div ref={containerRef} className="flex-1 min-h-0 min-w-0" />
+        <div className="relative flex-1 min-h-0 min-w-0">
+          <div ref={containerRef} className="absolute inset-0" />
+          {sceneId && selection && (
+            <SceneEditPanel
+              selection={selection}
+              mode={editMode}
+              onMode={(value) => editorRef.current?.setMode(value)}
+              onEdit={(value) => editorRef.current?.edit(value)}
+              onReset={() => editorRef.current?.reset()}
+              onClose={() => editorRef.current?.select(null)}
+            />
+          )}
+          {sceneId && !selection && (
+            <p className="pointer-events-none absolute bottom-4 inset-x-0 text-center text-xs text-white/70">
+              Click furniture to move or rotate it · Drag empty space to orbit
+            </p>
+          )}
+        </div>
         {showDebug && objectDebug && (
           <aside className="w-full md:w-80 max-h-80 md:max-h-full overflow-auto bg-zinc-900 p-4 text-xs text-zinc-200">
             <p className="mb-2">

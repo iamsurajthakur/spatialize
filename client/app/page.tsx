@@ -1,23 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import SceneViewer from "@/components/SceneViewer";
 import type { SceneData } from "@/lib/SceneData";
 
-type SceneResponse = {
-  id: number;
-  image: string;
-  scene_data: SceneData;
-  created_at: string;
-};
+import { fetchScene, type SceneResponse } from "@/lib/sceneApi";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [sceneData, setSceneData] = useState<SceneData | null>(null);
+  const [activeScene, setActiveScene] = useState<SceneResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   // Optional: Create a local URL to show a tiny preview of the selected image
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const restoreRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    const abort = new AbortController();
+    restoreRequest.current = abort;
+    const id = Number(new URLSearchParams(window.location.search).get("scene"));
+    if (Number.isSafeInteger(id) && id > 0) {
+      fetchScene(id, abort.signal)
+        .then((scene) => {
+          if (abort.signal.aborted) return;
+          setActiveScene(scene);
+          setSceneData(scene.scene_data);
+          setPreviewUrl(scene.image);
+        })
+        .catch((error) => {
+          if (!abort.signal.aborted) setError(error.message);
+        });
+    }
+    return () => abort.abort();
+  }, []);
+
+  const rememberScene = (id: number | null) => {
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("scene", String(id));
+    else url.searchParams.delete("scene");
+    window.history.replaceState(null, "", url);
+  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0] ?? null;
@@ -38,6 +61,7 @@ export default function Home() {
     }
 
     setLoading(true);
+    restoreRequest.current?.abort();
     setError("");
     setSceneData(null);
 
@@ -54,11 +78,10 @@ export default function Home() {
 
       const uploadedScene: SceneResponse = await uploadResponse.json();
 
-      const detailResponse = await fetch(`http://127.0.0.1:8000/api/scenes/${uploadedScene.id}/`);
-
-      if (!detailResponse.ok) throw new Error("Failed to fetch scene.");
-
-      const scene: SceneResponse = await detailResponse.json();
+      const scene = await fetchScene(uploadedScene.id);
+      setActiveScene(scene);
+      setPreviewUrl(scene.image);
+      rememberScene(scene.id);
       setSceneData(scene.scene_data);
     } catch (err) {
       console.error(err);
@@ -69,6 +92,8 @@ export default function Home() {
   };
 
   const resetState = () => {
+    rememberScene(null);
+    setActiveScene(null);
     setSceneData(null);
     setFile(null);
     setPreviewUrl(null);
@@ -213,7 +238,13 @@ export default function Home() {
             </button>
           </div>
 
-          <SceneViewer sceneData={sceneData} sourceImageUrl={previewUrl} />
+          <SceneViewer
+            key={activeScene?.id}
+            sceneId={activeScene?.id}
+            manualOverrides={activeScene?.manual_overrides}
+            sceneData={sceneData}
+            sourceImageUrl={previewUrl}
+          />
         </div>
       )}
     </main>
