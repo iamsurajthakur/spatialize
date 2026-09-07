@@ -1,0 +1,6 @@
+[tool.ruff]
+line-length = 88
+extend-exclude = ["venv"]
+
+[tool.ruff.format]
+quote-style = "preserve"

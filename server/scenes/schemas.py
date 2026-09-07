@@ -38,7 +38,9 @@ class SceneData(BaseModel):
     canonical_room: CanonicalRoom = Field(
         validation_alias=AliasChoices("canonical_room", "room_size_hint")
     )
-    coordinate_convention: Literal["floor_center_y_up_positive_z_front_v1"] = COORDINATE_CONVENTION
+    coordinate_convention: Literal["floor_center_y_up_positive_z_front_v1"] = (
+        COORDINATE_CONVENTION
+    )
     objects: list[SceneObject]
     camera: dict[str, Any] | None = None
     debug_info: dict[str, Any] = Field(default_factory=dict)
@@ -72,8 +74,16 @@ class WallRelation(BaseModel):
 
 class SpatialRelation(BaseModel):
     type: Literal[
-        "beside", "left_of", "right_of", "in_front_of", "behind", "near",
-        "against", "against_wall", "facing", "centered_on_wall"
+        "beside",
+        "left_of",
+        "right_of",
+        "in_front_of",
+        "behind",
+        "near",
+        "against",
+        "against_wall",
+        "facing",
+        "centered_on_wall",
     ]
     target: str
 
@@ -104,8 +114,15 @@ class SceneGeometryInputObject(BaseModel):
         description="Image projection of the CENTER of the footprint on the floor, including occluded floor. Null if unreliable.",
     )
     region: Literal[
-        "back_left", "back_center", "back_right", "center_left", "center",
-        "center_right", "front_left", "front_center", "front_right"
+        "back_left",
+        "back_center",
+        "back_right",
+        "center_left",
+        "center",
+        "center_right",
+        "front_left",
+        "front_center",
+        "front_right",
     ] = "center"
     wall_relation: WallRelation | None = None
     relations: list[SpatialRelation] = Field(default_factory=list)

@@ -29,10 +29,12 @@ def solve_linear(matrix, values):
 def homography(source, target):
     matrix, values = [], []
     for (x, y), (u, v) in zip(source, target):
-        matrix.extend([
-            [x, y, 1, 0, 0, 0, -u * x, -u * y],
-            [0, 0, 0, x, y, 1, -v * x, -v * y],
-        ])
+        matrix.extend(
+            [
+                [x, y, 1, 0, 0, 0, -u * x, -u * y],
+                [0, 0, 0, x, y, 1, -v * x, -v * y],
+            ]
+        )
         values.extend([u, v])
     return solve_linear(matrix, values) + [1.0]
 
@@ -41,8 +43,10 @@ def project(h, x, y):
     divisor = h[6] * x + h[7] * y + h[8]
     if abs(divisor) < EPSILON:
         raise ValueError("Point lies on the projective horizon")
-    return ((h[0] * x + h[1] * y + h[2]) / divisor,
-            (h[3] * x + h[4] * y + h[5]) / divisor)
+    return (
+        (h[0] * x + h[1] * y + h[2]) / divisor,
+        (h[3] * x + h[4] * y + h[5]) / divisor,
+    )
 
 
 def cross(a, b, c):
@@ -50,11 +54,21 @@ def cross(a, b, c):
 
 
 def valid_quad(points):
-    turns = [cross(points[i], points[(i + 1) % 4], points[(i + 2) % 4]) for i in range(4)]
+    turns = [
+        cross(points[i], points[(i + 1) % 4], points[(i + 2) % 4]) for i in range(4)
+    ]
     # Clockwise in image coordinates: BL, BR, FR, FL. Reject reversed labels,
     # folded quads and nearly edge-on planes that amplify tiny VLM errors.
-    area = abs(sum(points[i][0] * points[(i + 1) % 4][1]
-                   - points[(i + 1) % 4][0] * points[i][1] for i in range(4))) / 2
+    area = (
+        abs(
+            sum(
+                points[i][0] * points[(i + 1) % 4][1]
+                - points[(i + 1) % 4][0] * points[i][1]
+                for i in range(4)
+            )
+        )
+        / 2
+    )
     return all(turn > EPSILON for turn in turns) and area >= 0.01
 
 
@@ -65,13 +79,21 @@ def closest_in_quad(point, quad):
     for i, a in enumerate(quad):
         b = quad[(i + 1) % 4]
         dx, dy = b[0] - a[0], b[1] - a[1]
-        t = max(0, min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / (dx * dx + dy * dy)))
+        t = max(
+            0,
+            min(
+                1,
+                ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / (dx * dx + dy * dy),
+            ),
+        )
         candidates.append((a[0] + t * dx, a[1] + t * dy))
     return min(candidates, key=lambda p: math.dist(point, p))
 
 
 class FloorMapping:
-    def __init__(self, landmarks: RoomLandmarks | None, room: CanonicalRoom, aspect: float):
+    def __init__(
+        self, landmarks: RoomLandmarks | None, room: CanonicalRoom, aspect: float
+    ):
         self.room = room
         self.aspect = aspect
         self.method = "pinhole_prior"
@@ -82,14 +104,25 @@ class FloorMapping:
         self.to_floor = None
         completed_corner = None
         if landmarks:
-            corners = [landmarks.back_left_corner, landmarks.back_right_corner,
-                       landmarks.right_front_floor, landmarks.left_front_floor]
+            corners = [
+                landmarks.back_left_corner,
+                landmarks.back_right_corner,
+                landmarks.right_front_floor,
+                landmarks.left_front_floor,
+            ]
             # Three correspondences determine an affine plane ONLY with an
             # explicit parallel-projection observation. Never assume the missing
             # fourth point of a perspective quadrilateral forms a parallelogram.
-            if landmarks.projection_hint == "orthographic" and sum(p is not None for p in corners) == 3:
+            if (
+                landmarks.projection_hint == "orthographic"
+                and sum(p is not None for p in corners) == 3
+            ):
                 missing = corners.index(None)
-                a, b, opposite = corners[(missing + 1) % 4], corners[(missing - 1) % 4], corners[(missing + 2) % 4]
+                a, b, opposite = (
+                    corners[(missing + 1) % 4],
+                    corners[(missing - 1) % 4],
+                    corners[(missing + 2) % 4],
+                )
                 x, y = a.x + b.x - opposite.x, a.y + b.y - opposite.y
                 if 0 <= x <= 1 and 0 <= y <= 1:
                     corners[missing] = Point2D(x=x, y=y)
@@ -97,25 +130,44 @@ class FloorMapping:
             if all(p is not None for p in corners):
                 quad = [(p.x, p.y) for p in corners]
                 if valid_quad(quad):
-                    world = [(-room.width / 2, -room.depth / 2),
-                             (room.width / 2, -room.depth / 2),
-                             (room.width / 2, room.depth / 2),
-                             (-room.width / 2, room.depth / 2)]
+                    world = [
+                        (-room.width / 2, -room.depth / 2),
+                        (room.width / 2, -room.depth / 2),
+                        (room.width / 2, room.depth / 2),
+                        (-room.width / 2, room.depth / 2),
+                    ]
                     try:
                         self.to_floor = homography(quad, world)
                         self.to_image = homography(world, quad)
-                        denominators = [self.to_image[6] * x + self.to_image[7] * z + 1 for x, z in world]
+                        denominators = [
+                            self.to_image[6] * x + self.to_image[7] * z + 1
+                            for x, z in world
+                        ]
                         if min(denominators) <= EPSILON:
                             raise ValueError("Horizon crosses floor patch")
                         self.image_quad = quad
-                        self.method = "floor_homography" if completed_corner is None else "affine_three_corners"
-                        self.confidence = landmarks.confidence if completed_corner is None else min(landmarks.confidence, 0.5)
-                        self.reason = None if completed_corner is None else "One floor corner inferred using explicit orthographic projection hint"
+                        self.method = (
+                            "floor_homography"
+                            if completed_corner is None
+                            else "affine_three_corners"
+                        )
+                        self.confidence = (
+                            landmarks.confidence
+                            if completed_corner is None
+                            else min(landmarks.confidence, 0.5)
+                        )
+                        self.reason = (
+                            None
+                            if completed_corner is None
+                            else "One floor corner inferred using explicit orthographic projection hint"
+                        )
                         return
                     except ValueError as error:
                         self.reason = str(error)
                 else:
-                    self.reason = "Invalid, reversed or nearly degenerate floor quadrilateral"
+                    self.reason = (
+                        "Invalid, reversed or nearly degenerate floor quadrilateral"
+                    )
                 self.to_floor = self.to_image = None
 
         # Level pinhole geometry: distance = focal_length * eye_height / (v-horizon).
@@ -155,17 +207,37 @@ class FloorMapping:
         else:
             v = point.y - self.back_edge_slope * (point.x - self.back_center)
             distance = self.focal * self.eye_height / max(v - self.horizon, EPSILON)
-            bounded_distance = max(self.back_distance - self.room.depth, min(self.back_distance, distance))
-            z = self.room.depth / 2 - (bounded_distance - (self.back_distance - self.room.depth))
+            bounded_distance = max(
+                self.back_distance - self.room.depth, min(self.back_distance, distance)
+            )
+            z = self.room.depth / 2 - (
+                bounded_distance - (self.back_distance - self.room.depth)
+            )
             span = self.back_span * self.back_distance / bounded_distance
             x = (point.x - self.back_center) * self.room.width / span
-            clipped = abs(distance - bounded_distance) > EPSILON or abs(x) > self.room.width / 2
+            clipped = (
+                abs(distance - bounded_distance) > EPSILON
+                or abs(x) > self.room.width / 2
+            )
             x = max(-self.room.width / 2, min(self.room.width / 2, x))
             used = (point.x, point.y)
-        return x, z, {"method": self.method, "confidence": self.confidence * (0.5 if clipped else 1),
-                      "point_used": {"x": used[0], "y": used[1]}, "clipped_to_floor": clipped}
+        return (
+            x,
+            z,
+            {
+                "method": self.method,
+                "confidence": self.confidence * (0.5 if clipped else 1),
+                "point_used": {"x": used[0], "y": used[1]},
+                "clipped_to_floor": clipped,
+            },
+        )
 
     def debug(self):
-        return {"method": self.method, "confidence": self.confidence, "fallback_reason": self.reason,
-                "image_quad": self.image_quad, "floor_to_image": self.to_image,
-                "image_to_floor": self.to_floor}
+        return {
+            "method": self.method,
+            "confidence": self.confidence,
+            "fallback_reason": self.reason,
+            "image_quad": self.image_quad,
+            "floor_to_image": self.to_image,
+            "image_to_floor": self.to_floor,
+        }

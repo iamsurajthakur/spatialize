@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('scenes', '0003_scene_status'),
     ]
@@ -13,6 +12,14 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='scene',
             name='status',
-            field=models.CharField(choices=[('processing', 'Processing'), ('completed', 'Completed'), ('failed', 'Failed')], default='processing', max_length=20),
+            field=models.CharField(
+                choices=[
+                    ('processing', 'Processing'),
+                    ('completed', 'Completed'),
+                    ('failed', 'Failed'),
+                ],
+                default='processing',
+                max_length=20,
+            ),
         ),
     ]

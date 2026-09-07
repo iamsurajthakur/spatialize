@@ -95,42 +95,82 @@ def analyze_image(image_path: str) -> dict:
         response = client.models.generate_content(
             model=os.getenv("GEMINI_MODEL", "gemini-3.7-flash"),
             contents=[image_part, SCENE_PROMPT],
-            config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=SceneAnalysis),
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json", response_schema=SceneAnalysis
+            ),
         )
         result = SceneGeometryInput.model_validate_json(response.text or "")
-        if (FloorMapping(result.room_landmarks, CANONICAL_ROOM, 1).to_floor is None
-                or (result.room_landmarks and any(getattr(result.room_landmarks, name) is None
-                    for name in ("back_left_corner", "back_right_corner", "left_front_floor", "right_front_floor")))):
+        if FloorMapping(result.room_landmarks, CANONICAL_ROOM, 1).to_floor is None or (
+            result.room_landmarks
+            and any(
+                getattr(result.room_landmarks, name) is None
+                for name in (
+                    "back_left_corner",
+                    "back_right_corner",
+                    "left_front_floor",
+                    "right_front_floor",
+                )
+            )
+        ):
             # One bounded, focused retry. No invented completion of a partial
             # quadrilateral in code and no silent replacement by metric guesses.
-            original = result.room_landmarks.model_dump_json() if result.room_landmarks else "null"
+            original = (
+                result.room_landmarks.model_dump_json()
+                if result.room_landmarks
+                else "null"
+            )
             try:
                 refinement = client.models.generate_content(
                     model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
-                    contents=[image_part,
+                    contents=[
+                        image_part,
                         "Inspect ONLY the room FLOOR geometry. The previous landmarks could not define a usable rectangular floor patch: "
-                        + original + "\n" + SCENE_PROMPT.split("FLOOR LANDMARKS:")[1].split("OBJECT ANCHORS:")[0]
+                        + original
+                        + "\n"
+                        + SCENE_PROMPT.split("FLOOR LANDMARKS:")[1].split(
+                            "OBJECT ANCHORS:"
+                        )[0]
                         + "\nFollow the actual floor perimeter. Include visible near endpoints where side wall bases meet the open floor edge. "
                         "An occluded far wall-floor junction must be at FLOOR level, beneath furniture, not on a headboard, mattress or wall top. "
                         "Check that all four points go around one convex floor rectangle projected into the image. "
-                        "If a corner cannot be inferred, leave it null. Return only RoomLandmarks."],
-                    config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=RoomLandmarks),
+                        "If a corner cannot be inferred, leave it null. Return only RoomLandmarks.",
+                    ],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=RoomLandmarks,
+                    ),
                 )
                 refined = RoomLandmarks.model_validate_json(refinement.text or "")
                 if FloorMapping(refined, CANONICAL_ROOM, 1).to_floor is not None:
                     result.room_landmarks = refined
-                    result.analysis_notes.append("Initial floor landmarks incomplete/invalid; accepted one focused floor refinement. Initial: " + original)
+                    result.analysis_notes.append(
+                        "Initial floor landmarks incomplete/invalid; accepted one focused floor refinement. Initial: "
+                        + original
+                    )
                 else:
-                    result.analysis_notes.append("Focused floor refinement still incomplete/invalid; retained initial fallback. Refinement: " + refined.model_dump_json())
+                    result.analysis_notes.append(
+                        "Focused floor refinement still incomplete/invalid; retained initial fallback. Refinement: "
+                        + refined.model_dump_json()
+                    )
             except Exception as error:
                 # The first analysis is usable even if optional refinement is
                 # unavailable. Preserve it and make that degradation observable.
-                logger.warning("Optional floor refinement failed: %s", type(error).__name__)
-                result.analysis_notes.append("Floor refinement failed (" + type(error).__name__ + "); retained first analysis")
+                logger.warning(
+                    "Optional floor refinement failed: %s", type(error).__name__
+                )
+                result.analysis_notes.append(
+                    "Floor refinement failed ("
+                    + type(error).__name__
+                    + "); retained first analysis"
+                )
     result.image_aspect_ratio = image_aspect
     return result.model_dump()
 
 
 def get_mime_type(path: Path) -> str:
-    return {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}.get(
-        path.suffix.lower(), "application/octet-stream")
+    return {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }.get(path.suffix.lower(), "application/octet-stream")

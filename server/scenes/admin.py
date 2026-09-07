@@ -3,6 +3,7 @@ from django.utils.html import format_html
 
 from .models import Scene
 
+
 @admin.register(Scene)
 class SceneAdmin(admin.ModelAdmin):
     list_display = ("id", "image_preview", "created_at")

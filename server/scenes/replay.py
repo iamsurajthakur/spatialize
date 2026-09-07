@@ -22,14 +22,19 @@ def main():
     args = parser.parse_args()
     if args.image:
         from .vlm_service import analyze_image
+
         data = SceneGeometryInput.model_validate(analyze_image(str(args.image)))
-        args.output.with_suffix(".analysis.json").write_text(data.model_dump_json(indent=2))
+        args.output.with_suffix(".analysis.json").write_text(
+            data.model_dump_json(indent=2)
+        )
     else:
         data = SceneGeometryInput.model_validate_json(args.input.read_text())
     result = compute_geometry(data)
     validate_scene_json(result.model_dump())
     args.output.write_text(result.model_dump_json(indent=2))
-    print(f"{len(result.objects)} objects; mapping={result.debug_info['floor_mapping']['method']}; camera={result.camera['method']}")
+    print(
+        f"{len(result.objects)} objects; mapping={result.debug_info['floor_mapping']['method']}; camera={result.camera['method']}"
+    )
     print(args.output)
 
 

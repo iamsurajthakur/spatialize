@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 def ping(request):
     return Response({"status": "ok"})
 
+
 class SceneCreateView(APIView):
     parser_classes = [MultiPartParser]
 
@@ -38,7 +39,7 @@ class SceneCreateView(APIView):
             serializer.save(
                 scene_data={},
                 status="processing",
-            )
+            ),
         )
 
         try:
@@ -68,31 +69,29 @@ class SceneCreateView(APIView):
                 ]
             )
 
-            logger.info("Scene %s placed using %s", scene.pk,
-                        validated_scene_data["debug_info"]["floor_mapping"]["method"])
-
+            logger.info(
+                "Scene %s placed using %s",
+                scene.pk,
+                validated_scene_data["debug_info"]["floor_mapping"]["method"],
+            )
 
         except Exception as error:
             scene.status = "failed"
 
-            scene.save(
-                update_fields=["status"]
-            )
+            scene.save(update_fields=["status"])
 
             logger.exception("Scene %s analysis/geometry failed: %s", scene.pk, error)
 
             return Response(
                 {
-                    "id": scene.id, # type: ignore
+                    "id": scene.id,  # type: ignore
                     "status": "failed",
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        return Response(
-            SceneSerializer(scene).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response(SceneSerializer(scene).data, status=status.HTTP_201_CREATED)
+
 
 class SceneDetailView(RetrieveAPIView):
     queryset = Scene.objects.all()
