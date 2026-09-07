@@ -11,6 +11,7 @@ class Scene(models.Model):
     image = models.ImageField(upload_to="scenes/")
 
     scene_data = models.JSONField(default=dict)
+    manual_overrides = models.JSONField(default=dict, blank=True)
 
     status = models.CharField(
         max_length=20,

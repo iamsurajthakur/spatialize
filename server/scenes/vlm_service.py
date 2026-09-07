@@ -121,7 +121,7 @@ def analyze_image(image_path: str) -> dict:
             )
             try:
                 refinement = client.models.generate_content(
-                    model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
+                    model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
                     contents=[
                         image_part,
                         "Inspect ONLY the room FLOOR geometry. The previous landmarks could not define a usable rectangular floor patch: "

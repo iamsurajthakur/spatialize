@@ -1,18 +1,19 @@
+import logging
+from typing import cast
+
 from rest_framework import status
+from rest_framework.decorators import api_view
+from rest_framework.generics import RetrieveAPIView
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view
-from rest_framework.generics import RetrieveAPIView
 
-from .serializers import SceneSerializer
-from .models import Scene
-from .vlm_service import analyze_image
-from typing import cast
-import logging
-from .validators import validate_scene_json
 from .geometry_engine import compute_geometry
+from .models import Scene
 from .schemas import SceneGeometryInput
+from .serializers import ManualOverridesSerializer, SceneSerializer
+from .validators import validate_scene_json
+from .vlm_service import analyze_image
 
 logger = logging.getLogger(__name__)
 
@@ -96,3 +97,10 @@ class SceneCreateView(APIView):
 class SceneDetailView(RetrieveAPIView):
     queryset = Scene.objects.all()
     serializer_class = SceneSerializer
+
+    def patch(self, request, *args, **kwargs):
+        scene = self.get_object()
+        serializer = ManualOverridesSerializer(scene, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(SceneSerializer(scene, context=self.get_serializer_context()).data)
