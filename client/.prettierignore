@@ -1,0 +1,8 @@
+.next
+node_modules
+out
+build
+coverage
+public
+AGENTS.md
+CLAUDE.md

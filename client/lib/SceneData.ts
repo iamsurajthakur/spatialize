@@ -4,11 +4,12 @@ export type RoomDimensions = { width: number; height: number; depth: number };
 export type Position = { x: number; y: number; z: number };
 export type ImagePoint = { x: number; y: number };
 
-export type SceneObject = Position & RoomDimensions & {
-  id: string;
-  type: string;
-  rotation_y?: number; // Degrees, local front +Z; absent in legacy saved scenes.
-};
+export type SceneObject = Position &
+  RoomDimensions & {
+    id: string;
+    type: string;
+    rotation_y?: number; // Degrees, local front +Z; absent in legacy saved scenes.
+  };
 
 export type SceneCamera = {
   kind: "perspective" | "orthographic";
@@ -48,7 +49,11 @@ export type SceneData = {
   camera?: SceneCamera | null;
   debug_info?: {
     geometry_version: number;
-    floor_mapping: { method: string; image_quad: [number, number][] | null; fallback_reason: string | null };
+    floor_mapping: {
+      method: string;
+      image_quad: [number, number][] | null;
+      fallback_reason: string | null;
+    };
     objects: Record<string, ObjectDebug>;
   };
 };

@@ -54,9 +54,7 @@ export default function Home() {
 
       const uploadedScene: SceneResponse = await uploadResponse.json();
 
-      const detailResponse = await fetch(
-        `http://127.0.0.1:8000/api/scenes/${uploadedScene.id}/`
-      );
+      const detailResponse = await fetch(`http://127.0.0.1:8000/api/scenes/${uploadedScene.id}/`);
 
       if (!detailResponse.ok) throw new Error("Failed to fetch scene.");
 
@@ -82,42 +80,34 @@ export default function Home() {
       {!sceneData && (
         <div className="flex flex-col items-center justify-center min-h-screen p-4 sm:p-8 animate-in fade-in duration-700">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-[0_2px_40px_-12px_rgba(0,0,0,0.1)] border border-zinc-200 p-8">
-
             <div className="text-center mb-8">
               <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 mb-2">
                 Spatialize
               </h1>
-              <p className="text-sm text-zinc-500">
-                Upload a 2D image to generate a 3D model.
-              </p>
+              <p className="text-sm text-zinc-500">Upload a 2D image to generate a 3D model.</p>
             </div>
 
             {/* Custom File Input Area */}
             <div className="mb-6">
               <label
                 htmlFor="file-upload"
-                className={`relative flex flex-col items-center justify-center w-full h-48 rounded-xl border-2 border-dashed transition-all cursor-pointer overflow-hidden group ${file
+                className={`relative flex flex-col items-center justify-center w-full h-48 rounded-xl border-2 border-dashed transition-all cursor-pointer overflow-hidden group ${
+                  file
                     ? "border-zinc-300 bg-zinc-50"
                     : "border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50"
-                  }`}
+                }`}
               >
                 {previewUrl ? (
                   // Image Selected State
                   <div className="flex flex-col items-center justify-center w-full h-full p-4 text-center">
                     <div className="w-16 h-16 mb-3 rounded-lg overflow-hidden border border-zinc-200 shadow-sm">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={previewUrl}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
+                      <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
                     </div>
                     <p className="text-sm font-medium text-zinc-700 truncate w-full px-4">
                       {file?.name}
                     </p>
-                    <p className="text-xs text-zinc-400 mt-1">
-                      Click to choose a different image
-                    </p>
+                    <p className="text-xs text-zinc-400 mt-1">Click to choose a different image</p>
                   </div>
                 ) : (
                   // Empty State
@@ -137,12 +127,8 @@ export default function Home() {
                         />
                       </svg>
                     </div>
-                    <p className="text-sm font-medium text-zinc-700">
-                      Click to browse files
-                    </p>
-                    <p className="text-xs text-zinc-400 mt-1">
-                      Supports JPG, PNG, WEBP
-                    </p>
+                    <p className="text-sm font-medium text-zinc-700">Click to browse files</p>
+                    <p className="text-xs text-zinc-400 mt-1">Supports JPG, PNG, WEBP</p>
                   </div>
                 )}
 
@@ -159,8 +145,18 @@ export default function Home() {
             {/* Error Message */}
             {error && (
               <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-100 flex items-start gap-2 text-red-600 text-sm">
-                <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  className="w-4 h-4 mt-0.5 shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 <span>{error}</span>
               </div>
@@ -179,8 +175,19 @@ export default function Home() {
                     fill="none"
                     viewBox="0 0 24 24"
                   >
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
                   </svg>
                   Generating 3D Model...
                 </>
@@ -197,9 +204,7 @@ export default function Home() {
         <div className="relative w-full h-screen bg-zinc-950 animate-in fade-in duration-1000">
           {/* Subtle overlay header for the 3D viewer */}
           <div className="absolute top-0 left-0 right-0 p-6 z-10 flex justify-between items-center pointer-events-none">
-            <h2 className="text-white/80 font-medium tracking-wide">
-              Spatialize Viewer
-            </h2>
+            <h2 className="text-white/80 font-medium tracking-wide">Spatialize Viewer</h2>
             <button
               onClick={resetState}
               className="pointer-events-auto px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg backdrop-blur-md transition-colors border border-white/10"

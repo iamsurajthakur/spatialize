@@ -8,15 +8,24 @@ import { createPlant } from "../components/generators/plant";
 import { roomDimensions, type SceneData, type SceneObject } from "./SceneData";
 
 const generators: Record<string, () => THREE.Group> = {
-  bed: createBed, sofa: createSofa, desk: createDesk, table: createDesk,
-  chair: createChair, lamp: createLamp, plant: createPlant,
+  bed: createBed,
+  sofa: createSofa,
+  desk: createDesk,
+  table: createDesk,
+  chair: createChair,
+  lamp: createLamp,
+  plant: createPlant,
 };
 
 export function createSceneObject(object: SceneObject): THREE.Group {
-  const asset = generators[object.type]?.() ?? new THREE.Group().add(
-    new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshStandardMaterial({ color: object.type === "tv" ? 0x252830 : 0x95765b })),
-  );
+  const asset =
+    generators[object.type]?.() ??
+    new THREE.Group().add(
+      new THREE.Mesh(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshStandardMaterial({ color: object.type === "tv" ? 0x252830 : 0x95765b }),
+      ),
+    );
   const box = new THREE.Box3().setFromObject(asset);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
@@ -36,8 +45,10 @@ export function createSceneObject(object: SceneObject): THREE.Group {
 export function buildScene(scene: THREE.Scene, data: SceneData) {
   const room = roomDimensions(data);
   const material = new THREE.MeshStandardMaterial({ color: 0xd6d0c6, roughness: 0.9 });
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(room.width, 0.1, room.depth),
-    new THREE.MeshStandardMaterial({ color: 0xb69a79, roughness: 0.9 }));
+  const floor = new THREE.Mesh(
+    new THREE.BoxGeometry(room.width, 0.1, room.depth),
+    new THREE.MeshStandardMaterial({ color: 0xb69a79, roughness: 0.9 }),
+  );
   floor.position.y = -0.05; // Floor surface exactly Y=0.
   floor.name = "floor";
   scene.add(floor);
@@ -53,8 +64,8 @@ export function buildScene(scene: THREE.Scene, data: SceneData) {
     wall.name = name;
     wall.position.y = room.height / 2;
     // Geometry boundaries are INSIDE faces, so walls extend outward.
-    if (axis === "x") wall.position.x = sign * (room.width + thickness) / 2;
-    else wall.position.z = sign * (room.depth + thickness) / 2;
+    if (axis === "x") wall.position.x = (sign * (room.width + thickness)) / 2;
+    else wall.position.z = (sign * (room.depth + thickness)) / 2;
     scene.add(wall);
     return { mesh: wall, axis, sign };
   });
@@ -81,17 +92,36 @@ export function createSceneCamera(data: SceneData, aspect: number, mode: ViewMod
   const room = roomDimensions(data);
   const source = data.camera;
   if (mode === "source" && source) {
-    const camera = source.kind === "orthographic"
-      ? new THREE.OrthographicCamera(source.left, source.right, source.top, source.bottom, 0.01, 1000)
-      : new THREE.PerspectiveCamera(source.fov ?? 50, source.image_aspect_ratio, 0.01, 1000);
+    const camera =
+      source.kind === "orthographic"
+        ? new THREE.OrthographicCamera(
+            source.left,
+            source.right,
+            source.top,
+            source.bottom,
+            0.01,
+            1000,
+          )
+        : new THREE.PerspectiveCamera(source.fov ?? 50, source.image_aspect_ratio, 0.01, 1000);
     camera.position.fromArray(source.position);
     camera.up.fromArray(source.up);
     camera.lookAt(new THREE.Vector3(...source.target));
-    return { camera, target: new THREE.Vector3(...source.target), aspect: source.image_aspect_ratio };
+    return {
+      camera,
+      target: new THREE.Vector3(...source.target),
+      aspect: source.image_aspect_ratio,
+    };
   }
   const span = Math.max(room.width, room.depth);
   if (mode === "top") {
-    const camera = new THREE.OrthographicCamera(-span * aspect / 1.6, span * aspect / 1.6, span / 1.6, -span / 1.6, 0.01, 1000);
+    const camera = new THREE.OrthographicCamera(
+      (-span * aspect) / 1.6,
+      (span * aspect) / 1.6,
+      span / 1.6,
+      -span / 1.6,
+      0.01,
+      1000,
+    );
     camera.position.set(0, span * 3, 0);
     camera.up.set(0, 0, -1); // Back (-Z) at the top; +X still screen-right.
     camera.lookAt(0, 0, 0);
@@ -110,7 +140,8 @@ export function disposeScene(scene: THREE.Scene) {
   scene.traverse((object) => {
     if (object instanceof THREE.Mesh) {
       geometries.add(object.geometry);
-      for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material);
+      for (const material of Array.isArray(object.material) ? object.material : [object.material])
+        materials.add(material);
     }
   });
   geometries.forEach((geometry) => geometry.dispose());
