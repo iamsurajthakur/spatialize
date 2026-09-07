@@ -40,7 +40,7 @@ EPSILON = 1e-7
 SEMANTIC_MAX_FRACTION = 0.08
 COLLISION_MAX_FRACTION = 0.10
 
-
+# without this rotated objects can clip through walls
 def footprint(obj):
     angle = math.radians(obj.rotation_y)
     c, s = abs(math.cos(angle)), abs(math.sin(angle))
@@ -50,14 +50,14 @@ def footprint(obj):
 def position(obj):
     return {"x": obj.x, "y": obj.y, "z": obj.z}
 
-
+# never allow object to leave the room
 def clamp_to_room(obj, room):
     hx, hz = footprint(obj)
     obj.x = max(-room.width / 2 + hx, min(room.width / 2 - hx, obj.x))
     obj.z = max(-room.depth / 2 + hz, min(room.depth / 2 - hz, obj.z))
     obj.y = max(obj.height / 2, min(room.height - obj.height / 2, obj.y))
 
-
+# does the object have some wall constraint
 def wall_for(item):
     if item.wall_relation and item.wall_relation.target in WALLS:
         return item.wall_relation.target, item.wall_relation.type

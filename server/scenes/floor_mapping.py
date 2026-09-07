@@ -8,6 +8,7 @@ from .schemas import CanonicalRoom, Point2D, RoomLandmarks
 EPSILON = 1e-9
 
 
+# small linear equation solver using guassian elimination
 def solve_linear(matrix, values):
     """Pivoted elimination for the eight homography coefficients."""
     rows = [list(row) + [value] for row, value in zip(matrix, values)]
@@ -25,7 +26,7 @@ def solve_linear(matrix, values):
                 rows[i] = [v - factor * p for v, p in zip(rows[i], rows[col])]
     return [row[-1] for row in rows]
 
-
+# The function finds a mathematical transformation: image_coordinate -> floor_coordinate
 def homography(source, target):
     matrix, values = [], []
     for (x, y), (u, v) in zip(source, target):
@@ -38,7 +39,7 @@ def homography(source, target):
         values.extend([u, v])
     return solve_linear(matrix, values) + [1.0]
 
-
+# this uses the homography that we calculated
 def project(h, x, y):
     divisor = h[6] * x + h[7] * y + h[8]
     if abs(divisor) < EPSILON:
@@ -48,11 +49,11 @@ def project(h, x, y):
         (h[3] * x + h[4] * y + h[5]) / divisor,
     )
 
-
+# 2D cross-product-like orientation test: When going from A → B → C, are we turning clockwise or counterclockwise?
 def cross(a, b, c):
     return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
 
-
+# protect from bad VLM landmark prediction
 def valid_quad(points):
     turns = [
         cross(points[i], points[(i + 1) % 4], points[(i + 2) % 4]) for i in range(4)
@@ -71,7 +72,7 @@ def valid_quad(points):
     )
     return all(turn > EPSILON for turn in turns) and area >= 0.01
 
-
+# make the object stay inside my canonical floor
 def closest_in_quad(point, quad):
     if all(cross(quad[i], quad[(i + 1) % 4], point) >= -EPSILON for i in range(4)):
         return point
