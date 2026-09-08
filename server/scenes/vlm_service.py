@@ -93,7 +93,7 @@ def analyze_image(image_path: str) -> dict:
     # API credentials. The original image is sent only during explicit analysis.
     with genai.Client(api_key=os.getenv("GEMINI_API_KEY")) as client:
         response = client.models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.7-flash"),
+            model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
             contents=[image_part, SCENE_PROMPT],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json", response_schema=SceneAnalysis
