@@ -6,9 +6,10 @@ positions are bounding-box centers; dimensions are LOCAL, before Y rotation.
 
 import math
 
+from .camera_geometry import camera_from_floor
 from .floor_mapping import FloorMapping, project
 from .schemas import CanonicalRoom, SceneData, SceneGeometryInput, SceneObject
-
+from .window_geometry import place_window
 
 DEFAULT_SIZES = {
     "table": (1.5, 0.75, 0.8),
@@ -18,6 +19,8 @@ DEFAULT_SIZES = {
     "plant": (0.4, 1.2, 0.4),
     "desk": (1.2, 0.75, 0.6),
     "cabinet": (0.8, 1.8, 0.4),
+    "bookshelf": (1.0, 1.9, 0.36),
+    "window": (1.2, 1.2, 0.16),
     "lamp": (0.3, 1.5, 0.3),
     "tv": (1.0, 0.6, 0.1),
     "generic": (0.5, 0.5, 0.5),
@@ -40,6 +43,7 @@ EPSILON = 1e-7
 SEMANTIC_MAX_FRACTION = 0.08
 COLLISION_MAX_FRACTION = 0.10
 
+
 # without this rotated objects can clip through walls
 def footprint(obj):
     angle = math.radians(obj.rotation_y)
@@ -50,12 +54,14 @@ def footprint(obj):
 def position(obj):
     return {"x": obj.x, "y": obj.y, "z": obj.z}
 
+
 # never allow object to leave the room
 def clamp_to_room(obj, room):
     hx, hz = footprint(obj)
     obj.x = max(-room.width / 2 + hx, min(room.width / 2 - hx, obj.x))
     obj.z = max(-room.depth / 2 + hz, min(room.depth / 2 - hz, obj.z))
     obj.y = max(obj.height / 2, min(room.height - obj.height / 2, obj.y))
+
 
 # does the object have some wall constraint
 def wall_for(item):
@@ -283,7 +289,9 @@ def compute_geometry(input_data: SceneGeometryInput) -> SceneData:
         input_data.room_landmarks, room, input_data.image_aspect_ratio
     )
     inputs = {
-        item.id: item for item in sorted(input_data.objects, key=lambda item: item.id)
+        item.id: item
+        for item in sorted(input_data.objects, key=lambda item: item.id)
+        if item.type != "window"
     }
     objects, debug, locks, walls = {}, {}, {}, {}
     for item in inputs.values():
@@ -520,12 +528,19 @@ def compute_geometry(input_data: SceneGeometryInput) -> SceneData:
                 u - contact["x"], v - contact["y"]
             )
 
-    from .camera_geometry import camera_from_floor
+    camera = camera_from_floor(mapping)
+    # Architectural openings never participate in furniture collision/support
+    # adjustments, which would slide them along walls or drop them to the floor.
+    for item in sorted(input_data.objects, key=lambda item: item.id):
+        if item.type == "window":
+            objects[item.id], debug[item.id] = place_window(
+                item, wall_for(item), room, mapping, camera, DEFAULT_SIZES["window"]
+            )
 
     return SceneData(
         canonical_room=room,
-        objects=list(objects.values()),
-        camera=camera_from_floor(mapping),
+        objects=[objects[id] for id in sorted(objects)],
+        camera=camera,
         debug_info={
             "geometry_version": 2,
             "floor_mapping": mapping.debug(),

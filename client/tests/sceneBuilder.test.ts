@@ -52,6 +52,8 @@ describe("backend to Three.js geometry contract", () => {
       "table",
       "tv",
       "cabinet",
+      "bookshelf",
+      "window",
       "generic",
     ]) {
       for (const angle of [0, 90, -90, 35, 180]) {
@@ -90,6 +92,107 @@ describe("backend to Three.js geometry contract", () => {
         assert.ok(obj.z - box.min.z <= (s * obj.width + c * obj.depth) / 2 + 1e-6);
         close(mesh.rotation.y, (angle * Math.PI) / 180);
       }
+    }
+  });
+
+  it("renders a detected bookshelf with open bays facing into the room", () => {
+    const data = geometry({
+      objects: [
+        {
+          id: "bookshelf_1",
+          type: "bookshelf",
+          bbox: { x_min: 0.3, x_max: 0.5, y_min: 0.2, y_max: 0.7 },
+          wall_relation: { type: "against_wall", target: "back_wall" },
+        },
+      ],
+    });
+    const object = data.objects[0];
+    assert.equal(object.type, "bookshelf");
+    assert.ok(object.height > object.width && object.width > object.depth);
+    const scene = new THREE.Scene();
+    const { objects } = buildScene(scene, data);
+    const bookshelf = objects.get(object.id)!;
+    const bounds = new THREE.Box3().setFromObject(bookshelf);
+    close(bounds.min.y, 0);
+    close(bounds.min.z, -2.5);
+    // A ray through the empty space above the lowest row of books should hit
+    // the recessed back panel, proving this is an open shelf, not a solid box.
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(object.x, object.height * 0.18, object.z + 1),
+      new THREE.Vector3(0, 0, -1),
+    );
+    const hits = ray.intersectObject(bookshelf, true);
+    assert.ok(hits.length > 0);
+    assert.ok(hits[0].point.z < object.z);
+    bookshelf.traverse((child) => {
+      assert.equal(child.userData.sceneObjectId, object.id);
+    });
+    disposeScene(scene);
+  });
+
+  it("mounts windows at their observed wall positions for perspective and orthographic images", () => {
+    for (const original of [
+      new THREE.PerspectiveCamera(55, 1.5, 0.01, 100),
+      new THREE.OrthographicCamera(-4.5, 4.5, 3, -3, 0.01, 100),
+    ]) {
+      original.position.set(3, 4, 8);
+      original.lookAt(0, 0, 0);
+      const floor = (x: number, z: number) => uv(original, x, 0, z);
+      const expected = [
+        { wall: "back_wall", x: -0.7, y: 1.8, z: -2.42, rotation: 0 },
+        { wall: "left_wall", x: -2.42, y: 1.7, z: 0.2, rotation: 90 },
+        { wall: "right_wall", x: 2.42, y: 1.6, z: -0.4, rotation: -90 },
+        { wall: "front_wall", x: 0.3, y: 1.5, z: 2.42, rotation: 180 },
+      ];
+      const data = geometry({
+        image_aspect_ratio: 1.5,
+        room_landmarks: {
+          back_left_corner: floor(-2.5, -2.5),
+          back_right_corner: floor(2.5, -2.5),
+          left_front_floor: floor(-2.5, 2.5),
+          right_front_floor: floor(2.5, 2.5),
+          confidence: 1,
+        },
+        objects: expected.map(({ wall, x, y, z }) => {
+          const center = uv(original, x, y, z);
+          return {
+            id: wall,
+            type: "window",
+            center,
+            floor_contact: null,
+            support: wall,
+            bbox: {
+              x_min: center.x - 0.02,
+              x_max: center.x + 0.02,
+              y_min: center.y - 0.02,
+              y_max: center.y + 0.02,
+            },
+            wall_relation: { type: "against_wall", target: wall },
+          };
+        }),
+      });
+      const scene = new THREE.Scene();
+      const room = buildScene(scene, data);
+      for (const position of expected) {
+        const obj = data.objects.find((o) => o.id === position.wall)!;
+        close(obj.x, position.x);
+        close(obj.y, position.y);
+        close(obj.z, position.z);
+        close(obj.rotation_y!, position.rotation);
+        const mesh = room.objects.get(obj.id)!;
+        const bounds = new THREE.Box3().setFromObject(mesh);
+        assert.ok(bounds.min.y > 0);
+        assert.ok(bounds.max.y < 3);
+        assert.ok(mesh.children[0].children.length > 1);
+      }
+      room.updateWalls(original);
+      assert.equal(room.objects.get("back_wall")!.visible, true);
+      assert.equal(room.objects.get("front_wall")!.visible, false);
+      original.position.set(0, 2, -8);
+      room.updateWalls(original);
+      assert.equal(room.objects.get("back_wall")!.visible, false);
+      assert.equal(room.objects.get("front_wall")!.visible, true);
+      disposeScene(scene);
     }
   });
 

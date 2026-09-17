@@ -31,7 +31,7 @@ export type SceneCamera = {
 export type ObjectDebug = {
   bbox_normalized: { x_min: number; x_max: number; y_min: number; y_max: number };
   bbox_bottom_center: ImagePoint;
-  floor_contact: ImagePoint;
+  floor_contact: ImagePoint | null;
   reprojected_floor_contact?: ImagePoint;
   initial_canonical_position: Position;
   final_position: Position;

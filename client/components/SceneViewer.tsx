@@ -280,24 +280,28 @@ export default function SceneViewer({
                   )}
                   {Object.entries(objectDebug).map(([id, debug]) => (
                     <g key={id} onClick={() => setSelected(id)} style={{ cursor: "pointer" }}>
-                      <circle
-                        cx={debug.floor_contact.x}
-                        cy={debug.floor_contact.y}
-                        r="0.007"
-                        fill="#fbbf24"
-                      >
-                        <title>{id}: input anchor</title>
-                      </circle>
+                      {debug.floor_contact && (
+                        <circle
+                          cx={debug.floor_contact.x}
+                          cy={debug.floor_contact.y}
+                          r="0.007"
+                          fill="#fbbf24"
+                        >
+                          <title>{id}: input anchor</title>
+                        </circle>
+                      )}
                       {debug.reprojected_floor_contact && (
                         <>
-                          <line
-                            x1={debug.floor_contact.x}
-                            y1={debug.floor_contact.y}
-                            x2={debug.reprojected_floor_contact.x}
-                            y2={debug.reprojected_floor_contact.y}
-                            stroke="#f87171"
-                            strokeWidth="0.002"
-                          />
+                          {debug.floor_contact && (
+                            <line
+                              x1={debug.floor_contact.x}
+                              y1={debug.floor_contact.y}
+                              x2={debug.reprojected_floor_contact.x}
+                              y2={debug.reprojected_floor_contact.y}
+                              stroke="#f87171"
+                              strokeWidth="0.002"
+                            />
+                          )}
                           <circle
                             cx={debug.reprojected_floor_contact.x}
                             cy={debug.reprojected_floor_contact.y}

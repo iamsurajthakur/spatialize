@@ -5,6 +5,8 @@ import { createDesk } from "../components/generators/desk";
 import { createChair } from "../components/generators/chair";
 import { createLamp } from "../components/generators/lamp";
 import { createPlant } from "../components/generators/plant";
+import { createBookshelf } from "../components/generators/bookshelf";
+import { createWindow } from "../components/generators/window";
 import { roomDimensions, type SceneData, type SceneObject } from "./SceneData";
 
 const generators: Record<string, () => THREE.Group> = {
@@ -15,6 +17,8 @@ const generators: Record<string, () => THREE.Group> = {
   chair: createChair,
   lamp: createLamp,
   plant: createPlant,
+  bookshelf: createBookshelf,
+  window: createWindow,
 };
 
 export function createSceneObject(object: SceneObject): THREE.Group {
@@ -73,10 +77,14 @@ export function buildScene(scene: THREE.Scene, data: SceneData) {
     return { mesh: wall, axis, sign };
   });
   const objects = new Map<string, THREE.Group>();
+  const windows: { mesh: THREE.Group; wall: string | null | undefined }[] = [];
   for (const object of data.objects) {
     const mesh = createSceneObject(object);
     objects.set(object.id, mesh);
     scene.add(mesh);
+    if (object.type === "window") {
+      windows.push({ mesh, wall: data.debug_info?.objects[object.id]?.wall_selected });
+    }
   }
   scene.add(new THREE.AmbientLight(0xffffff, 1.6));
   const light = new THREE.DirectionalLight(0xffffff, 2.5);
@@ -90,6 +98,9 @@ export function buildScene(scene: THREE.Scene, data: SceneData) {
         const value = axis === "x" ? camera.position.x : camera.position.z;
         const boundary = (axis === "x" ? room.width : room.depth) / 2;
         mesh.visible = value * sign < boundary; // Hide camera-side walls for a cutaway.
+        for (const window of windows) {
+          if (window.wall === mesh.name) window.mesh.visible = mesh.visible;
+        }
       }
     },
   };

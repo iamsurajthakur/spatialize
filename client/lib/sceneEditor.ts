@@ -168,8 +168,11 @@ export function createSceneEditor({
     }
     scene.updateMatrixWorld(true);
     raycaster.setFromCamera(new THREE.Vector2(x * 2 - 1, 1 - y * 2), camera);
-    // Only furniture enters this raycast: room surfaces, gizmos and helpers never select.
-    const hit = raycaster.intersectObjects([...objects.values()], true)[0];
+    // Cutaway windows, room surfaces, gizmos and helpers never select.
+    const hit = raycaster.intersectObjects(
+      [...objects.values()].filter((object) => object.visible),
+      true,
+    )[0];
     select(hit?.object.userData.sceneObjectId ?? null);
   }
   function cancelPointer() {

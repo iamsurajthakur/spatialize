@@ -223,6 +223,8 @@ class GeometryEngineTests(TestCase):
             "plant",
             "desk",
             "cabinet",
+            "bookshelf",
+            "window",
             "lamp",
             "tv",
             "generic",

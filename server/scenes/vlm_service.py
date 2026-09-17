@@ -1,25 +1,43 @@
-import os
 import logging
+import os
 from io import BytesIO
 from pathlib import Path
 
 from dotenv import load_dotenv
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 from PIL import Image, ImageOps
 
-from .schemas import SceneAnalysis, SceneGeometryInput, RoomLandmarks
 from .floor_mapping import FloorMapping
 from .geometry_engine import CANONICAL_ROOM
+from .schemas import RoomLandmarks, SceneAnalysis, SceneGeometryInput
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
+DEFAULT_GEMINI_MODELS = (
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+)
+FALLBACK_STATUS_CODES = {404, 408, 429, 500, 502, 503, 504}
+
 SCENE_PROMPT = """
-Describe the major visible furniture in this room as a coherent stylized layout.
+Describe the major visible furniture and windows in this room as a coherent stylized layout.
 All image points and bounding boxes use normalized [0,1] coordinates: left/top=0,
 right/bottom=1. Never output metric dimensions, room sizes or 3D coordinates.
-Allowed object types: table, chair, sofa, bed, desk, cabinet, lamp, plant, tv, generic.
+Allowed object types: table, chair, sofa, bed, desk, cabinet, bookshelf, window, lamp, plant, tv, generic.
+Use bookshelf for a visible bookcase or freestanding open shelving unit, including
+partially filled or empty bookcases. Use cabinet for storage with closed doors.
+Treat the bookshelf and its books as one object; do not list individual books.
+Use window for a visible wall window, not a mirror, painting, TV, or doorway.
+Include its frame in the bbox and describe each separate window as one object.
+For windows, set wall_relation to against_wall and the wall containing the window,
+using the named floor edges below. Use support equal to that wall name. Set center
+to the image center of the window frame. Set floor_contact to null unless the floor
+projection directly beneath its center is reliable. The backend mounts windows
+above the floor using their image position; never treat their lower edge as floor.
 Use unique IDs and exact IDs for relation/support targets. Do not invent hidden objects.
 
 FLOOR LANDMARKS:
@@ -70,10 +88,55 @@ orientation, not a new location. Do not create redundant contradictory relations
 orientation may be parallel_to_back_wall, parallel_to_left_wall,
 parallel_to_right_wall, parallel_to_front_wall, or unknown. This names the wall
 behind the object's back: its front faces inward from that wall.
-support is floor or the exact ID of a supporting object. Avoid unsupported wall
+support is floor, a window's wall name, or the exact ID of a supporting object. Avoid unsupported wall
 art/ceiling fixtures unless their vertical placement can be represented.
 Give object confidence [0,1]. Return only the requested structured JSON.
 """
+
+
+def _get_model_candidates() -> list[str]:
+    primary = os.getenv("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODELS[0]
+    default_start = (
+        DEFAULT_GEMINI_MODELS.index(primary) + 1
+        if primary in DEFAULT_GEMINI_MODELS
+        else 1
+    )
+    # An explicitly empty fallback list disables model switching.
+    fallbacks = os.getenv(
+        "GEMINI_FALLBACK_MODELS", ",".join(DEFAULT_GEMINI_MODELS[default_start:])
+    )
+    return list(
+        dict.fromkeys(
+            model.strip() for model in [primary, *fallbacks.split(",")] if model.strip()
+        )
+    )
+
+
+def _generate_content_with_fallback(
+    client: genai.Client,
+    *,
+    models: list[str],
+    contents: list[types.Part | str],
+    config: types.GenerateContentConfig,
+) -> tuple[types.GenerateContentResponse, str]:
+    for index, model in enumerate(models):
+        try:
+            response = client.models.generate_content(
+                model=model, contents=contents, config=config
+            )
+            return response, model
+        except errors.APIError as error:
+            # Switch only for unavailable models or transient API failures.
+            # Authentication and invalid-request errors need to reach the caller.
+            if error.code not in FALLBACK_STATUS_CODES or index == len(models) - 1:
+                raise
+            logger.warning(
+                "Gemini model %s failed (HTTP %s); falling back to %s",
+                model,
+                error.code,
+                models[index + 1],
+            )
+    raise ValueError("At least one Gemini model must be configured")
 
 
 def analyze_image(image_path: str) -> dict:
@@ -91,9 +154,11 @@ def analyze_image(image_path: str) -> dict:
     image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
     # Lazy construction keeps offline validation, replay and tests independent of
     # API credentials. The original image is sent only during explicit analysis.
+    models = _get_model_candidates()
     with genai.Client(api_key=os.getenv("GEMINI_API_KEY")) as client:
-        response = client.models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
+        response, selected_model = _generate_content_with_fallback(
+            client,
+            models=models,
             contents=[image_part, SCENE_PROMPT],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json", response_schema=SceneAnalysis
@@ -120,8 +185,11 @@ def analyze_image(image_path: str) -> dict:
                 else "null"
             )
             try:
-                refinement = client.models.generate_content(
-                    model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+                # Start with the working model; skip models that already failed
+                # for this image while allowing further fallbacks if needed.
+                refinement, _ = _generate_content_with_fallback(
+                    client,
+                    models=models[models.index(selected_model) :],
                     contents=[
                         image_part,
                         "Inspect ONLY the room FLOOR geometry. The previous landmarks could not define a usable rectangular floor patch: "
@@ -152,7 +220,7 @@ def analyze_image(image_path: str) -> dict:
                         "Focused floor refinement still incomplete/invalid; retained initial fallback. Refinement: "
                         + refined.model_dump_json()
                     )
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 - refinement is optional
                 # The first analysis is usable even if optional refinement is
                 # unavailable. Preserve it and make that degradation observable.
                 logger.warning(

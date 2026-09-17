@@ -2,11 +2,21 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
-
 UnitFloat = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
 PositiveFloat = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 ALLOWED_OBJECT_TYPES = Literal[
-    "table", "chair", "sofa", "bed", "plant", "desk", "cabinet", "lamp", "tv", "generic"
+    "table",
+    "chair",
+    "sofa",
+    "bed",
+    "plant",
+    "desk",
+    "cabinet",
+    "bookshelf",
+    "window",
+    "lamp",
+    "tv",
+    "generic",
 ]
 COORDINATE_CONVENTION = "floor_center_y_up_positive_z_front_v1"
 
@@ -108,7 +118,7 @@ class SceneGeometryInputObject(BaseModel):
     id: str = Field(min_length=1)
     type: ALLOWED_OBJECT_TYPES
     bbox: BoundingBox2D
-    center: Point2D | None = None  # Legacy descriptive field; never a depth anchor.
+    center: Point2D | None = None  # Wall-window image center; never a floor anchor.
     floor_contact: Point2D | None = Field(
         default=None,
         description="Image projection of the CENTER of the footprint on the floor, including occluded floor. Null if unreliable.",
