@@ -54,6 +54,7 @@ describe("backend to Three.js geometry contract", () => {
       "cabinet",
       "bookshelf",
       "window",
+      "rug",
       "generic",
     ]) {
       for (const angle of [0, 90, -90, 35, 180]) {
@@ -192,6 +193,47 @@ describe("backend to Three.js geometry contract", () => {
       room.updateWalls(original);
       assert.equal(room.objects.get("back_wall")!.visible, false);
       assert.equal(room.objects.get("front_wall")!.visible, true);
+      disposeScene(scene);
+    }
+  });
+
+  it("renders the detected rug color on a thin floor covering beneath furniture", () => {
+    for (const color of ["#8b4c39", "#236b65", "#ABCDEF", "#000000", "#ffffff", null]) {
+      const data = geometry({
+        objects: [
+          {
+            id: "rug_1",
+            type: "rug",
+            color,
+            bbox: { x_min: 0.3, x_max: 0.7, y_min: 0.5, y_max: 0.8 },
+            floor_contact: { x: 0.5, y: 0.65 },
+          },
+          {
+            id: "table_1",
+            type: "table",
+            support: "rug_1",
+            bbox: { x_min: 0.4, x_max: 0.6, y_min: 0.4, y_max: 0.7 },
+            floor_contact: { x: 0.5, y: 0.65 },
+          },
+        ],
+      });
+      const scene = new THREE.Scene();
+      const { objects } = buildScene(scene, data);
+      const rug = objects.get("rug_1")!;
+      const fabric = rug.getObjectByName("rug_fabric") as THREE.Mesh<
+        THREE.BoxGeometry,
+        THREE.MeshStandardMaterial
+      >;
+      assert.equal(
+        fabric.material.color.getHexString(),
+        (color ?? "#b7a58a").slice(1).toLowerCase(),
+      );
+      const bounds = new THREE.Box3().setFromObject(rug);
+      close(bounds.min.y, 0);
+      assert.ok(bounds.max.y > 0 && bounds.max.y < 0.03);
+      close(objects.get("table_1")!.position.x, rug.position.x);
+      close(objects.get("table_1")!.position.z, rug.position.z);
+      assert.equal(fabric.userData.sceneObjectId, "rug_1");
       disposeScene(scene);
     }
   });

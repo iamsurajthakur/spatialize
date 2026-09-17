@@ -7,9 +7,10 @@ import { createLamp } from "../components/generators/lamp";
 import { createPlant } from "../components/generators/plant";
 import { createBookshelf } from "../components/generators/bookshelf";
 import { createWindow } from "../components/generators/window";
+import { createRug } from "../components/generators/rug";
 import { roomDimensions, type SceneData, type SceneObject } from "./SceneData";
 
-const generators: Record<string, () => THREE.Group> = {
+const generators: Record<string, (object: SceneObject) => THREE.Group> = {
   bed: createBed,
   sofa: createSofa,
   desk: createDesk,
@@ -19,11 +20,12 @@ const generators: Record<string, () => THREE.Group> = {
   plant: createPlant,
   bookshelf: createBookshelf,
   window: createWindow,
+  rug: (object) => createRug(object.color),
 };
 
 export function createSceneObject(object: SceneObject): THREE.Group {
   const asset =
-    generators[object.type]?.() ??
+    generators[object.type]?.(object) ??
     new THREE.Group().add(
       new THREE.Mesh(
         new THREE.BoxGeometry(1, 1, 1),

@@ -8,7 +8,7 @@ import math
 
 from .camera_geometry import camera_from_floor
 from .floor_mapping import FloorMapping, project
-from .schemas import CanonicalRoom, SceneData, SceneGeometryInput, SceneObject
+from .schemas import CanonicalRoom, Point2D, SceneData, SceneGeometryInput, SceneObject
 from .window_geometry import place_window
 
 DEFAULT_SIZES = {
@@ -21,6 +21,7 @@ DEFAULT_SIZES = {
     "cabinet": (0.8, 1.8, 0.4),
     "bookshelf": (1.0, 1.9, 0.36),
     "window": (1.2, 1.2, 0.16),
+    "rug": (2.0, 0.016, 2.8),
     "lamp": (0.3, 1.5, 0.3),
     "tv": (1.0, 0.6, 0.1),
     "generic": (0.5, 0.5, 0.5),
@@ -288,10 +289,13 @@ def compute_geometry(input_data: SceneGeometryInput) -> SceneData:
     mapping = FloorMapping(
         input_data.room_landmarks, room, input_data.image_aspect_ratio
     )
+    rug_ids = {item.id for item in input_data.objects if item.type == "rug"}
     inputs = {
-        item.id: item
+        item.id: item.model_copy(update={"support": "floor"})
+        if item.support in rug_ids
+        else item
         for item in sorted(input_data.objects, key=lambda item: item.id)
-        if item.type != "window"
+        if item.type not in {"window", "rug"}
     }
     objects, debug, locks, walls = {}, {}, {}, {}
     for item in inputs.values():
@@ -472,13 +476,19 @@ def compute_geometry(input_data: SceneGeometryInput) -> SceneData:
             tx, tz = footprint(target)
             # Directional relations are inequalities. Satisfied relations do not
             # align the unrelated axis or increase separation to fit guessed sizes.
-            if relation.type == "left_of" and obj.x > target.x:
+            if (
+                relation.type == "left_of"
+                and obj.x > target.x
+                or relation.type == "right_of"
+                and obj.x < target.x
+            ):
                 dx = target.x - obj.x
-            elif relation.type == "right_of" and obj.x < target.x:
-                dx = target.x - obj.x
-            elif relation.type == "in_front_of" and obj.z < target.z:
-                dz = target.z - obj.z
-            elif relation.type == "behind" and obj.z > target.z:
+            elif (
+                relation.type == "in_front_of"
+                and obj.z < target.z
+                or relation.type == "behind"
+                and obj.z > target.z
+            ):
                 dz = target.z - obj.z
             elif relation.type in {"near", "beside", "against", "against_wall"}:
                 vx, vz = target.x - obj.x, target.z - obj.z
@@ -529,13 +539,72 @@ def compute_geometry(input_data: SceneGeometryInput) -> SceneData:
             )
 
     camera = camera_from_floor(mapping)
-    # Architectural openings never participate in furniture collision/support
+    # Windows and floor coverings never participate in furniture collision/support
     # adjustments, which would slide them along walls or drop them to the floor.
     for item in sorted(input_data.objects, key=lambda item: item.id):
         if item.type == "window":
             objects[item.id], debug[item.id] = place_window(
                 item, wall_for(item), room, mapping, camera, DEFAULT_SIZES["window"]
             )
+        elif item.type == "rug":
+            # Rugs are floor coverings, so furniture can overlap them. Their
+            # centers (not their near bbox edges) anchor their floor position.
+            contact = (
+                item.floor_contact
+                or item.center
+                or Point2D(
+                    x=(item.bbox.x_min + item.bbox.x_max) / 2,
+                    y=(item.bbox.y_min + item.bbox.y_max) / 2,
+                )
+            )
+            x, z, evidence = mapping.map(contact)
+            width, height, depth = DEFAULT_SIZES["rug"]
+            obj = SceneObject(
+                id=item.id,
+                type="rug",
+                x=x,
+                y=height / 2,
+                z=z,
+                width=width,
+                height=height,
+                depth=depth,
+                color=item.color,
+                rotation_y={
+                    f"parallel_to_{name}": spec[2] for name, spec in WALLS.items()
+                }.get(item.orientation, 0),
+            )
+            initial = position(obj)
+            clamp_to_room(obj, room)
+            objects[item.id] = obj
+            debug[item.id] = {
+                "bbox_normalized": item.bbox.model_dump(),
+                "bbox_bottom_center": item.bbox.bottom_center().model_dump(),
+                "floor_contact": contact.model_dump(),
+                "contact_method": "footprint_center"
+                if item.floor_contact
+                else "rug_center_proxy",
+                "initial_canonical_position": initial,
+                "final_position": position(obj),
+                "mapping": evidence,
+                "confidence": item.confidence
+                * evidence["confidence"]
+                * (1 if item.floor_contact else 0.6),
+                "size_method": "semantic_canonical_prior",
+                "color_method": "vlm_dominant_fabric"
+                if item.color
+                else "neutral_fabric_prior",
+                "wall_selected": None,
+                "constraints": [{"type": "floor_covering"}],
+                "collision_corrections": [],
+                "warnings": []
+                if item.floor_contact
+                else [
+                    "Rug center estimated from image center/bbox; occlusion can bias placement"
+                ],
+            }
+            if mapping.to_image:
+                u, v = project(mapping.to_image, obj.x, obj.z)
+                debug[item.id]["reprojected_floor_contact"] = {"x": u, "y": v}
 
     return SceneData(
         canonical_room=room,

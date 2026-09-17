@@ -10,6 +10,7 @@ export type SceneObject = Position &
   RoomDimensions & {
     id: string;
     type: string;
+    color?: string | null;
     rotation_y?: number; // Degrees, local front +Z; absent in legacy saved scenes.
   };
 

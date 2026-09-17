@@ -90,6 +90,27 @@ class VlmModelFallbackTests(TestCase):
             self.assertEqual(call.kwargs["config"], first["config"])
         self.assertEqual(result["image_aspect_ratio"], 4 / 3)
 
+    def test_detected_rug_keeps_its_color_through_analysis_and_geometry(self):
+        from .geometry_engine import compute_geometry
+        from .schemas import SceneGeometryInput
+
+        detected = {
+            **self.fixture,
+            "objects": [
+                {
+                    **self.fixture["objects"][0],
+                    "id": "rug_1",
+                    "type": "rug",
+                    "color": "#8B4C39",
+                }
+            ],
+        }
+        result = self.analyze(detected)
+        obj = compute_geometry(SceneGeometryInput.model_validate(result)).objects[0]
+        self.assertEqual(obj.type, "rug")
+        self.assertEqual(obj.color, "#8B4C39")
+        self.assertAlmostEqual(obj.y - obj.height / 2, 0)
+
     def test_detected_window_survives_analysis_and_mounts_above_floor(self):
         from .geometry_engine import compute_geometry
         from .schemas import SceneGeometryInput

@@ -24,10 +24,10 @@ DEFAULT_GEMINI_MODELS = (
 FALLBACK_STATUS_CODES = {404, 408, 429, 500, 502, 503, 504}
 
 SCENE_PROMPT = """
-Describe the major visible furniture and windows in this room as a coherent stylized layout.
+Describe the major visible furniture, windows, and floor rugs in this room as a coherent stylized layout.
 All image points and bounding boxes use normalized [0,1] coordinates: left/top=0,
 right/bottom=1. Never output metric dimensions, room sizes or 3D coordinates.
-Allowed object types: table, chair, sofa, bed, desk, cabinet, bookshelf, window, lamp, plant, tv, generic.
+Allowed object types: table, chair, sofa, bed, desk, cabinet, bookshelf, window, rug, lamp, plant, tv, generic.
 Use bookshelf for a visible bookcase or freestanding open shelving unit, including
 partially filled or empty bookcases. Use cabinet for storage with closed doors.
 Treat the bookshelf and its books as one object; do not list individual books.
@@ -38,6 +38,14 @@ using the named floor edges below. Use support equal to that wall name. Set cent
 to the image center of the window frame. Set floor_contact to null unless the floor
 projection directly beneath its center is reliable. The backend mounts windows
 above the floor using their image position; never treat their lower edge as floor.
+Use rug for a visible loose floor rug, area rug, carpet mat, or runner, including
+rugs partially under furniture. Do not label bare floors, floor tiles, shadows,
+or wall-to-wall carpet as separate rugs. Set color to its dominant fabric color
+as a six-digit #RRGGBB hex value. For patterns, use the main background/base color;
+ignore shadows, highlights, and furniture covering the rug. Use null if uncertain.
+For rugs, floor_contact is the image projection of the rug's CENTER on the floor,
+not its nearest edge. Set support=floor and wall_relation=null. Furniture standing
+on a rug still uses support=floor; rugs may overlap furniture without moving it.
 Use unique IDs and exact IDs for relation/support targets. Do not invent hidden objects.
 
 FLOOR LANDMARKS:

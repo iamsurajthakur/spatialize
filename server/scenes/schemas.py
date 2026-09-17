@@ -4,6 +4,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 UnitFloat = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
 PositiveFloat = Annotated[float, Field(gt=0, allow_inf_nan=False)]
+HexColor = Annotated[str, Field(pattern=r"^#[0-9a-fA-F]{6}$")]
 ALLOWED_OBJECT_TYPES = Literal[
     "table",
     "chair",
@@ -14,6 +15,7 @@ ALLOWED_OBJECT_TYPES = Literal[
     "cabinet",
     "bookshelf",
     "window",
+    "rug",
     "lamp",
     "tv",
     "generic",
@@ -41,6 +43,7 @@ class SceneObject(BaseModel):
     width: PositiveFloat
     height: PositiveFloat
     depth: PositiveFloat
+    color: HexColor | None = None
 
 
 class SceneData(BaseModel):
@@ -118,7 +121,11 @@ class SceneGeometryInputObject(BaseModel):
     id: str = Field(min_length=1)
     type: ALLOWED_OBJECT_TYPES
     bbox: BoundingBox2D
-    center: Point2D | None = None  # Wall-window image center; never a floor anchor.
+    color: HexColor | None = Field(
+        default=None,
+        description="For rugs, the dominant visible fabric color as #RRGGBB, ignoring shadows and covering furniture. Null if uncertain or not a rug.",
+    )
+    center: Point2D | None = None  # Image center; window anchor or rug fallback only.
     floor_contact: Point2D | None = Field(
         default=None,
         description="Image projection of the CENTER of the footprint on the floor, including occluded floor. Null if unreliable.",

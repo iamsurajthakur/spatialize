@@ -225,6 +225,7 @@ class GeometryEngineTests(TestCase):
             "cabinet",
             "bookshelf",
             "window",
+            "rug",
             "lamp",
             "tv",
             "generic",
