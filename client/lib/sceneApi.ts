@@ -1,12 +1,23 @@
 import type { ManualOverrides, SceneData } from "./SceneData";
 
-const API = "http://127.0.0.1:8000/api/scenes/";
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000")
+  .trim()
+  .replace(/\/+$/, "");
+const API = `${API_BASE}/api/scenes/`;
 export type SceneResponse = {
   id: number;
   image: string;
   scene_data: SceneData;
   manual_overrides: ManualOverrides;
 };
+
+export async function uploadScene(file: File): Promise<SceneResponse> {
+  const body = new FormData();
+  body.append("image", file);
+  const response = await fetch(API, { method: "POST", body });
+  if (!response.ok) throw new Error("Upload failed.");
+  return response.json();
+}
 
 export async function fetchScene(id: number, signal?: AbortSignal): Promise<SceneResponse> {
   const response = await fetch(`${API}${id}/`, { signal, cache: "no-store" });

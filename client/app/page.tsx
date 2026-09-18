@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import SceneViewer from "@/components/SceneViewer";
 import type { SceneData } from "@/lib/SceneData";
 
-import { fetchScene, type SceneResponse } from "@/lib/sceneApi";
+import { fetchScene, uploadScene, type SceneResponse } from "@/lib/sceneApi";
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -66,17 +66,7 @@ export default function Home() {
     setSceneData(null);
 
     try {
-      const formData = new FormData();
-      formData.append("image", file);
-
-      const uploadResponse = await fetch("http://127.0.0.1:8000/api/scenes/", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!uploadResponse.ok) throw new Error("Upload failed.");
-
-      const uploadedScene: SceneResponse = await uploadResponse.json();
+      const uploadedScene = await uploadScene(file);
 
       const scene = await fetchScene(uploadedScene.id);
       setActiveScene(scene);
