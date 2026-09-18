@@ -1,10 +1,13 @@
 # Spatialize
 
-**Turn a single room image into an editable, stylized 3D scene.**
+Spatialize is a full-stack application that transforms a room photograph or illustration into an interactive 3D scene that can be explored and refined directly in the browser.
 
-Spatialize is a full-stack MVP that takes a room photograph or illustration, identifies its visible furniture and layout, and builds a scene you can explore in the browser. You can compare the result with the source image, switch camera views, and move or rotate objects to refine the layout.
+The system analyzes the input image to identify visible furniture, estimate spatial relationships, and reconstruct an approximate room layout. Users can compare the generated scene with the original image, switch between camera views, and manually move or rotate objects to improve the reconstruction.
 
-The project combines Gemini's visual understanding with a Python geometry engine and procedural Three.js models. Its focus is making the arrangement of a room understandable and editable. The output is an approximate scene: dimensions, furniture shapes, and camera placement are estimated or use predefined values.
+Spatialize combines Gemini's visual understanding with a Python-based geometry engine and procedural Three.js models. Rather than attempting photorealistic reconstruction, the project focuses on understanding and visualizing the spatial arrangement of a room in an editable 3D environment.
+
+Because the scene is inferred from a single 2D image, object dimensions, depth, camera placement, and some furniture geometry are estimated or based on predefined model dimensions. The result is therefore an interpretable approximation of the original room rather than an exact digital replica.
+
 
 ## What you can do
 
@@ -246,7 +249,7 @@ node scripts/preview-scene.mjs /tmp/spatialize-scene.json /path/to/source-image.
 
 This opens a preview server at `http://127.0.0.1:3099`; open that address in your browser. Use the image corresponding to the analysis being replayed. The script requires a Node.js version with `node:fs.globSync` and uses CSS from the production build. The build uses Google fonts through `next/font/google`, so font fetching may require network access. Replay previews do not persist edits because they have no saved scene ID.
 
-## Current limitations
+## Current limitations: There are a lot :(
 
 - **Approximate reconstruction.** A single image does not establish physical scale or hidden geometry. The fixed room and object dimensions can distort the source room's proportions. This MVP is unsuitable for measurement-dependent planning.
 - **Rectangular room assumption.** Floor mapping assumes a rectangular planar patch. Nonrectangular rooms, unusual camera projections, heavy occlusion, and cropped floor boundaries can lead to inaccurate placement or fallback estimates.
