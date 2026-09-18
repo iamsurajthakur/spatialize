@@ -8,6 +8,7 @@ Spatialize combines Gemini's visual understanding with a Python-based geometry e
 
 Because the scene is inferred from a single 2D image, object dimensions, depth, camera placement, and some furniture geometry are estimated or based on predefined model dimensions. The result is therefore an interpretable approximation of the original room rather than an exact digital replica.
 
+![Preview](images/scene.png)
 
 ## What you can do
 
