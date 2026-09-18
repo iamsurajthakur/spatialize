@@ -1,0 +1,14 @@
+# Runtime dependencies; update pins intentionally and run the test suites.
+Django==6.1
+djangorestframework==3.18.0
+django-cors-headers==4.9.0
+google-genai==2.20.0
+pydantic==2.13.5
+Pillow==12.3.0
+python-dotenv==1.2.3
+dj-database-url==3.1.2
+psycopg[binary]==3.3.5
+django-storages[s3]==1.14.6
+boto3==1.43.97
+gunicorn==25.3.0
+whitenoise==6.12.0

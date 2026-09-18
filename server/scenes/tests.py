@@ -25,7 +25,7 @@ class SceneApiTests(TestCase):
             tempfile.TemporaryDirectory() as media,
             override_settings(MEDIA_ROOT=media),
         ):
-            with patch("scenes.views.analyze_image", return_value=input_data):
+            with patch("scenes.views.analyze_image_bytes", return_value=input_data):
                 response = self.client.post("/api/scenes/", {"image": upload})
             self.assertEqual(response.status_code, 201, response.content)
             payload = response.json()

@@ -54,7 +54,7 @@ class ManualOverrideTests(TestCase):
             "chair_1": {"x": 1, "z": 1, "rotation_y": -45},
         }
         with (
-            patch("scenes.views.analyze_image") as vlm,
+            patch("scenes.views.analyze_image_bytes") as vlm,
             patch("scenes.views.compute_geometry") as geometry,
         ):
             self.assertEqual(self.save(overrides).status_code, 200)

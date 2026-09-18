@@ -148,9 +148,14 @@ def _generate_content_with_fallback(
 
 
 def analyze_image(image_path: str) -> dict:
-    path = Path(image_path)
-    image_bytes, mime_type = path.read_bytes(), get_mime_type(path)
-    with Image.open(path) as image:
+    """Local-file entry point for the replay CLI."""
+    return analyze_image_bytes(Path(image_path).read_bytes())
+
+
+def analyze_image_bytes(image_bytes: bytes) -> dict:
+    """Analyze pixels from either local or remote Django storage."""
+    with Image.open(BytesIO(image_bytes)) as image:
+        mime_type = Image.MIME.get(image.format, "application/octet-stream")
         upright = ImageOps.exif_transpose(image)
         image_aspect = upright.width / upright.height
         if image.getexif().get(274, 1) != 1:
@@ -163,7 +168,12 @@ def analyze_image(image_path: str) -> dict:
     # Lazy construction keeps offline validation, replay and tests independent of
     # API credentials. The original image is sent only during explicit analysis.
     models = _get_model_candidates()
-    with genai.Client(api_key=os.getenv("GEMINI_API_KEY")) as client:
+    with genai.Client(
+        api_key=os.getenv("GEMINI_API_KEY"),
+        http_options=types.HttpOptions(
+            timeout=int(os.getenv("GEMINI_TIMEOUT_MS", "60000"))
+        ),
+    ) as client:
         response, selected_model = _generate_content_with_fallback(
             client,
             models=models,
@@ -241,12 +251,3 @@ def analyze_image(image_path: str) -> dict:
                 )
     result.image_aspect_ratio = image_aspect
     return result.model_dump()
-
-
-def get_mime_type(path: Path) -> str:
-    return {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".webp": "image/webp",
-    }.get(path.suffix.lower(), "application/octet-stream")

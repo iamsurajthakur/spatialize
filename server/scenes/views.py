@@ -13,7 +13,7 @@ from .models import Scene
 from .schemas import SceneGeometryInput
 from .serializers import ManualOverridesSerializer, SceneSerializer
 from .validators import validate_scene_json
-from .vlm_service import analyze_image
+from .vlm_service import analyze_image_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ def ping(request):
 
 
 class SceneCreateView(APIView):
-    parser_classes = [MultiPartParser]
+    parser_classes = (MultiPartParser,)
 
     def post(self, request):
         serializer = SceneSerializer(data=request.data)
@@ -45,7 +45,8 @@ class SceneCreateView(APIView):
 
         try:
             # Send the uploaded image to Gemini
-            vlm_result = analyze_image(scene.image.path)
+            with scene.image.open("rb") as image:
+                vlm_result = analyze_image_bytes(image.read())
 
             # Convert to SceneGeometryInput
             geom_input = SceneGeometryInput(**vlm_result)
@@ -76,12 +77,12 @@ class SceneCreateView(APIView):
                 validated_scene_data["debug_info"]["floor_mapping"]["method"],
             )
 
-        except Exception as error:
+        except Exception:
             scene.status = "failed"
 
             scene.save(update_fields=["status"])
 
-            logger.exception("Scene %s analysis/geometry failed: %s", scene.pk, error)
+            logger.exception("Scene %s analysis/geometry failed", scene.pk)
 
             return Response(
                 {
@@ -103,4 +104,6 @@ class SceneDetailView(RetrieveAPIView):
         serializer = ManualOverridesSerializer(scene, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(SceneSerializer(scene, context=self.get_serializer_context()).data)
+        return Response(
+            SceneSerializer(scene, context=self.get_serializer_context()).data
+        )

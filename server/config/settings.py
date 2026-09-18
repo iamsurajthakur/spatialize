@@ -10,25 +10,71 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
-from pathlib import Path
-from dotenv import load_dotenv
 import os
+from pathlib import Path
+
+import dj_database_url
+from botocore.config import Config
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
+def env_bool(name, default=False):
+    value = os.getenv(name, str(default)).strip().lower()
+    if value not in {"true", "false", "1", "0"}:
+        raise ImproperlyConfigured(f"{name} must be true or false")
+    return value in {"true", "1"}
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-pdhw$sp=3yjm@sazgp)mf^rn=s3q4eot#kpp#))5lecubj4&)d'
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+def env_list(name, default=""):
+    return [
+        value.strip() for value in os.getenv(name, default).split(",") if value.strip()
+    ]
 
-ALLOWED_HOSTS = []
+
+def required_env(name):
+    value = os.getenv(name, "").strip()
+    if not value:
+        raise ImproperlyConfigured(f"{name} is required for this deployment")
+    return value
+
+
+# Local development remains zero-config; Render defaults to production mode.
+DEBUG = env_bool("DJANGO_DEBUG", default=not bool(os.getenv("RENDER")))
+SECRET_KEY = (
+    os.getenv("DJANGO_SECRET_KEY") or "django-insecure-local-development-only"
+    if DEBUG
+    else required_env("DJANGO_SECRET_KEY")
+)
+ALLOWED_HOSTS = env_list(
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]" if DEBUG else ""
+)
+if render_host := os.getenv("RENDER_EXTERNAL_HOSTNAME"):
+    ALLOWED_HOSTS.append(render_host)
+if not DEBUG and (not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS):
+    raise ImproperlyConfigured("Set explicit DJANGO_ALLOWED_HOSTS in production")
+
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = env_list(
+    "DJANGO_CORS_ALLOWED_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000" if DEBUG else "",
+)
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+# Render terminates HTTPS before forwarding requests to Gunicorn.
+# Only enable this elsewhere when the trusted proxy overwrites this header.
+if env_bool("DJANGO_TRUST_PROXY", default=bool(os.getenv("RENDER"))):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 # Application definition
@@ -46,8 +92,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -79,12 +126,27 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+database_url = os.getenv("DATABASE_URL", "").strip()
+if database_url:
+    DATABASES = {
+        'default': dj_database_url.parse(
+            database_url,
+            conn_max_age=60,
+            conn_health_checks=True,
+            ssl_require=not DEBUG,
+        )
     }
-}
+    if DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
+        raise ImproperlyConfigured("DATABASE_URL must point to PostgreSQL")
+elif DEBUG:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+else:
+    raise ImproperlyConfigured("DATABASE_URL is required in production")
 
 
 # Password validation
@@ -121,16 +183,58 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-CORS_ALLOW_ALL_ORIGINS = True
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        if DEBUG
+        else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    },
+}
+MEDIA_STORAGE = os.getenv("MEDIA_STORAGE", "local" if DEBUG else "s3").strip()
+if MEDIA_STORAGE == "s3":
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "endpoint_url": required_env("AWS_S3_ENDPOINT_URL"),
+            "access_key": required_env("AWS_ACCESS_KEY_ID"),
+            "secret_key": required_env("AWS_SECRET_ACCESS_KEY"),
+            "bucket_name": required_env("AWS_STORAGE_BUCKET_NAME"),
+            "region_name": required_env("AWS_S3_REGION_NAME"),
+            "signature_version": "s3v4",
+            "addressing_style": "path",
+            "default_acl": None,
+            "file_overwrite": False,
+            "querystring_auth": True,
+            "querystring_expire": 3600,
+            # Keep S3 requests compatible with non-AWS providers.
+            "client_config": Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+                connect_timeout=10,
+                read_timeout=30,
+                retries={"max_attempts": 2},
+            ),
+        },
+    }
+elif MEDIA_STORAGE != "local" or not DEBUG:
+    raise ImproperlyConfigured(
+        "Use MEDIA_STORAGE=s3 in production or local in development"
+    )
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
 MAILERS = {
     'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        'BACKEND': 'django.core.mail.backends.console.EmailBackend'
+        if DEBUG
+        else 'django.core.mail.backends.smtp.EmailBackend',
     },
 }
 
