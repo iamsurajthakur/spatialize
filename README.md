@@ -40,10 +40,10 @@ flowchart TD
     C --> D[Gemini structured image analysis]
     D --> E[Pydantic validation]
     E --> F[Python geometry engine]
-    F --> G[Validate and save SceneData in SQLite]
+    F --> G[Validate and save SceneData in the database]
     G --> H[Three.js procedural scene and editor]
     H --> I[PATCH manual object transforms]
-    I --> J[Save overrides separately in SQLite]
+    I --> J[Save overrides separately in the database]
     J --> H
 ```
 
@@ -69,7 +69,7 @@ These are the main design choices reflected in the implementation.
 | Build assets procedurally with Three.js | Each supported type has a reusable model that can be centered, scaled, selected, and edited consistently. | Shapes and most materials are predefined rather than reconstructed from the image. |
 | Keep generated data separate from manual overrides | Resetting an object is straightforward, and editing preserves the original generated scene and its diagnostics. | Edits do not recompute support relationships, camera fitting, or collision resolution. |
 | Use a separate Next.js client and Django REST backend | UI/rendering and image analysis/geometry have clear boundaries connected by JSON. | Local development needs two servers and cross-origin requests. |
-| Use synchronous processing, SQLite, and local media storage | Keeps the MVP's infrastructure small and easy to run locally. | Slow model calls occupy the request; shared hosting and concurrent workloads need additional infrastructure. |
+| Use synchronous processing with environment-specific persistence | SQLite and local media keep development simple; PostgreSQL and S3-compatible storage persist deployed scenes. | Slow model calls still occupy the request; hosted deployment needs database and storage credentials. |
 | Store placement diagnostics and support offline replay | A saved analysis can reproduce geometry without another model call, making placement issues easier to investigate. | Scene payloads include substantial diagnostic data; there is no dedicated compact production response. |
 
 ### Coordinate and data contract
@@ -93,7 +93,7 @@ Each database scene stores the uploaded image path, generated `scene_data`, sepa
 | --- | --- |
 | Web interface | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
 | 3D viewer and editing | Three.js, OrbitControls, TransformControls |
-| API and persistence | Django, Django REST Framework, SQLite |
+| API and persistence | Django, Django REST Framework, SQLite locally; PostgreSQL and S3-compatible storage in production |
 | Image analysis | Google Gen AI Python SDK / Gemini |
 | Validation and image handling | Pydantic 2, Pillow, python-dotenv |
 | Development checks | Bun tests, Django/unittest tests, TypeScript, ESLint, Prettier, Ruff |
@@ -116,17 +116,10 @@ cd server
 python3 -m venv venv
 source venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install \
-  Django==6.1 \
-  djangorestframework==3.18.0 \
-  django-cors-headers==4.9.0 \
-  google-genai==2.20.0 \
-  pydantic==2.13.5 \
-  Pillow==12.3.0 \
-  python-dotenv==1.2.3
+python -m pip install -r requirements.txt
 ```
 
-These direct dependency versions reflect the existing development environment. The repository does not yet contain a backend runtime requirements file or dependency lock; `server/requirements-dev.txt` currently contains only Ruff, and `server/pyproject.toml` configures Ruff.
+Runtime dependencies are pinned in `server/requirements.txt`. Optional tooling is in `server/requirements-dev.txt`, and `server/pyproject.toml` configures Ruff.
 
 For a fresh setup, run `cp .env.example .env` from `server/`. If you already have a `.env`, keep it and update its settings as needed. Replace the placeholders with your own values:
 
@@ -165,7 +158,11 @@ bun run dev
 
 Open `http://localhost:3000`, choose a room image, and select **Generate Model**. Generation needs network access to Gemini. Uploaded images are stored in `server/media/scenes/` and sent to Gemini for analysis; scene records are stored in `server/db.sqlite3`.
 
-The frontend currently uses `http://127.0.0.1:8000` directly in [`page.tsx`](client/app/page.tsx) and [`sceneApi.ts`](client/lib/sceneApi.ts). There is no API-base-URL environment variable yet. Running the backend elsewhere requires updating both locations.
+The frontend defaults to `http://127.0.0.1:8000`. To use another backend, copy `client/.env.example` to `client/.env.local` and set `NEXT_PUBLIC_API_BASE_URL` to its origin, without `/api`. Restart the development server after changing it; production builds must be rebuilt when the value changes.
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the Vercel + Render + Supabase setup, exact environment variables, and verification steps. The root [render.yaml](render.yaml) configures the API's build, production server, and health check. Production mode requires PostgreSQL, private S3-compatible image storage, and a Django secret. It enables HTTPS settings and serves collected static assets through WhiteNoise. Cloud resources and credentials must be supplied separately.
 
 ### Viewer controls
 
@@ -258,9 +255,9 @@ This opens a preview server at `http://127.0.0.1:3099`; open that address in you
 - **Bounded collision handling.** Generated placements use bounding-box approximations and limited corrections, so intersections can remain. The engine records unresolved conflicts rather than guaranteeing a collision-free scene.
 - **Basic manual editing.** Only X/Z translation and Y-axis rotation are editable. There is no resizing, vertical movement, object addition/deletion, undo/redo, or mesh export. Edits enforce room bounds but do not prevent object overlaps or preserve wall/support attachments; moving a desk does not automatically move an object resting on it.
 - **External inference dependency.** New uploads require a working Gemini key, network access, model availability, and quota. Model calls introduce latency and usage costs; fallback attempts and floor refinement can add calls. The UI shows a loading state without progress stages or cancellation.
-- **Local persistence and single-request processing.** SQLite and local files need to persist together. There is no background worker, object storage, scene gallery, multiuser ownership, or concurrency/version control for edits. Competing clients can overwrite the same override map.
-- **Development configuration.** Django currently enables debug mode and all-origin CORS, uses a development secret key, and has no scene-level authentication or authorization. Anyone who can reach the API can retrieve or edit a scene by ID. A public deployment needs production configuration and access control.
-- **Setup reproducibility.** Frontend dependencies have a Bun lockfile; backend runtime dependencies are not yet recorded in a dedicated manifest/lockfile. Local SQLite databases, uploaded media, and environment files are ignored by Git; configure your own backend using `server/.env.example` and run migrations when setting up a clone.
+- **Single-request processing and editing concurrency.** Generation has no background worker. There is no scene gallery, multiuser ownership, or concurrency/version control for edits. Competing clients can overwrite the same override map. Local scenes are not automatically transferred to the cloud database.
+- **Shared-demo access.** Production configuration restricts CORS, uses HTTPS, and supports private image storage, but the scene API still has no authentication requirement, ownership checks, or generation rate limit. Anyone who can reach it can generate, retrieve, or edit scenes by ID. Private storage does not make individual scenes private.
+- **Setup reproducibility.** Frontend dependencies have a Bun lockfile and backend direct dependencies are pinned in `server/requirements.txt`; backend transitive dependencies are not fully locked. Local databases, uploaded media, and environment files are ignored by Git. Configure your own environment and run migrations when setting up a clone.
 
 ## Repository guide
 

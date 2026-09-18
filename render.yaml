@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: spatialize-api
+    runtime: python
+    plan: free
+    rootDir: server
+    buildCommand: bash build.sh
+    startCommand: gunicorn config.wsgi:application --config gunicorn.conf.py
+    healthCheckPath: /api/ping/
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: MEDIA_STORAGE
+        value: s3
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+      - key: AWS_S3_REGION_NAME
+        sync: false
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
+      - key: GEMINI_FALLBACK_MODELS
+        value: ""
