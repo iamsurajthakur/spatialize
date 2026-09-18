@@ -1,4 +1,4 @@
-# Spatialize
+# Spatialize: Vision-guided spatial reasoning for interactive 3D scene reconstruction
 
 Spatialize is a full-stack application that transforms a room photograph or illustration into an interactive 3D scene that can be explored and refined directly in the browser.
 
