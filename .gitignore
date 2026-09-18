@@ -1,4 +1,21 @@
-three-playground/
-server/media/scenes/
-server/.env/
-docs/
+# Local environment files (keep safe templates versioned)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Logs and operating-system/editor files
+*.log
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Existing local experiments and working documentation
+/three-playground/
+/docs/

@@ -1,1 +1,35 @@
-venv/
+# Python environments
+/venv/
+/.venv/
+/env/
+/ENV/
+
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pytype/
+.pyre/
+.tox/
+.nox/
+
+# Coverage and packaging output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.egg-info/
+/build/
+/dist/
+
+# Local Django databases and SQLite sidecar files
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Uploaded media and collected static assets
+/media/
+/staticfiles/

@@ -128,7 +128,7 @@ python -m pip install \
 
 These direct dependency versions reflect the existing development environment. The repository does not yet contain a backend runtime requirements file or dependency lock; `server/requirements-dev.txt` currently contains only Ruff, and `server/pyproject.toml` configures Ruff.
 
-Create or update `server/.env` with your own settings, replacing the placeholders:
+For a fresh setup, run `cp .env.example .env` from `server/`. If you already have a `.env`, keep it and update its settings as needed. Replace the placeholders with your own values:
 
 ```dotenv
 GEMINI_API_KEY=your_api_key_here
@@ -260,7 +260,7 @@ This opens a preview server at `http://127.0.0.1:3099`; open that address in you
 - **External inference dependency.** New uploads require a working Gemini key, network access, model availability, and quota. Model calls introduce latency and usage costs; fallback attempts and floor refinement can add calls. The UI shows a loading state without progress stages or cancellation.
 - **Local persistence and single-request processing.** SQLite and local files need to persist together. There is no background worker, object storage, scene gallery, multiuser ownership, or concurrency/version control for edits. Competing clients can overwrite the same override map.
 - **Development configuration.** Django currently enables debug mode and all-origin CORS, uses a development secret key, and has no scene-level authentication or authorization. Anyone who can reach the API can retrieve or edit a scene by ID. A public deployment needs production configuration and access control.
-- **Setup reproducibility.** Frontend dependencies have a Bun lockfile; backend runtime dependencies are not yet recorded in a dedicated manifest/lockfile. The repository also tracks a local SQLite database and `server/.env`; real credentials should not be published with the repository.
+- **Setup reproducibility.** Frontend dependencies have a Bun lockfile; backend runtime dependencies are not yet recorded in a dedicated manifest/lockfile. Local SQLite databases, uploaded media, and environment files are ignored by Git; configure your own backend using `server/.env.example` and run migrations when setting up a clone.
 
 ## Repository guide
 
