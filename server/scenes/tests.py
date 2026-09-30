@@ -3,14 +3,52 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from django.test import TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from PIL import Image
 
 from .models import Scene
 
 
 class SceneApiTests(TestCase):
+    def test_ai_failures_have_safe_actionable_responses_and_failed_status(self):
+        from google.genai import errors
+
+        from .vlm_service import ModelsUnavailableError
+
+        cases = [
+            (ModelsUnavailableError([("busy", "HTTP 503")]), 503, "ai_unavailable"),
+            (
+                errors.ClientError(403, {"message": "private-provider-details"}),
+                502,
+                "ai_request_failed",
+            ),
+            (RuntimeError("private-internal-details"), 500, None),
+        ]
+        for failure, expected_status, code in cases:
+            with (
+                self.subTest(code=code),
+                tempfile.TemporaryDirectory() as media,
+                override_settings(MEDIA_ROOT=media),
+                patch("scenes.views.analyze_image_bytes", side_effect=failure),
+                self.assertLogs("scenes.views", level="WARNING"),
+            ):
+                pixels = io.BytesIO()
+                Image.new("RGB", (4, 3)).save(pixels, format="PNG")
+                upload = SimpleUploadedFile(
+                    "room.png", pixels.getvalue(), content_type="image/png"
+                )
+                response = self.client.post("/api/scenes/", {"image": upload})
+                self.assertEqual(response.status_code, expected_status)
+                self.assertEqual(response.json().get("code"), code)
+                self.assertEqual(
+                    Scene.objects.get(pk=response.json()["id"]).status, "failed"
+                )
+                self.assertNotIn("private-", response.content.decode())
+                if expected_status == 503:
+                    self.assertEqual(response["Retry-After"], "30")
+                    self.assertIn("try again", response.json()["detail"])
+
     def test_upload_geometry_serialization_and_retrieval(self):
         fixture = Path(__file__).with_name("fixtures") / "basic_room_annotated.json"
         import json
@@ -46,9 +84,10 @@ class SceneApiTests(TestCase):
 
 class VlmPipelineTests(TestCase):
     def _run_analysis(self, responses):
-        from types import SimpleNamespace
-        from .vlm_service import analyze_image
         import json
+        from types import SimpleNamespace
+
+        from .vlm_service import analyze_image
 
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "room.png"
@@ -68,6 +107,7 @@ class VlmPipelineTests(TestCase):
 
     def test_incomplete_floor_gets_one_focused_refinement(self):
         import json
+
         from .schemas import SceneGeometryInput
 
         fixture = json.loads(
@@ -113,6 +153,7 @@ class VlmPipelineTests(TestCase):
     def test_exif_orientation_matches_model_pixels_and_renderer_aspect(self):
         import json
         from types import SimpleNamespace
+
         from .vlm_service import analyze_image
 
         fixture = json.loads(

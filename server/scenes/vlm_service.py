@@ -1,12 +1,16 @@
 import logging
 import os
+import random
+import time
 from io import BytesIO
 from pathlib import Path
 
+import httpx
 from dotenv import load_dotenv
 from google import genai
 from google.genai import errors, types
 from PIL import Image, ImageOps
+from pydantic import BaseModel, ValidationError
 
 from .floor_mapping import FloorMapping
 from .geometry_engine import CANONICAL_ROOM
@@ -17,11 +21,35 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_GEMINI_MODELS = (
     "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
 )
 FALLBACK_STATUS_CODES = {404, 408, 429, 500, 502, 503, 504}
+TRANSPORT_ERRORS = (
+    httpx.TimeoutException,
+    httpx.NetworkError,
+    httpx.RemoteProtocolError,
+)
+
+
+class ModelsUnavailableError(RuntimeError):
+    """All configured models failed, or the shared analysis time budget expired."""
+
+    def __init__(self, attempts: list[tuple[str, str]]):
+        self.attempts = attempts
+        super().__init__(
+            "AI analysis is temporarily unavailable. Please try again shortly."
+        )
+
+
+def _positive_int_setting(name: str, default: int) -> int:
+    value = int(os.getenv(name, str(default)))
+    if value <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return value
+
 
 SCENE_PROMPT = """
 Describe the major visible furniture, windows, and floor rugs in this room as a coherent stylized layout.
@@ -104,15 +132,8 @@ Give object confidence [0,1]. Return only the requested structured JSON.
 
 def _get_model_candidates() -> list[str]:
     primary = os.getenv("GEMINI_MODEL", "").strip() or DEFAULT_GEMINI_MODELS[0]
-    default_start = (
-        DEFAULT_GEMINI_MODELS.index(primary) + 1
-        if primary in DEFAULT_GEMINI_MODELS
-        else 1
-    )
     # An explicitly empty fallback list disables model switching.
-    fallbacks = os.getenv(
-        "GEMINI_FALLBACK_MODELS", ",".join(DEFAULT_GEMINI_MODELS[default_start:])
-    )
+    fallbacks = os.getenv("GEMINI_FALLBACK_MODELS", ",".join(DEFAULT_GEMINI_MODELS))
     return list(
         dict.fromkeys(
             model.strip() for model in [primary, *fallbacks.split(",")] if model.strip()
@@ -126,25 +147,89 @@ def _generate_content_with_fallback(
     models: list[str],
     contents: list[types.Part | str],
     config: types.GenerateContentConfig,
+    deadline: float | None = None,
+    response_model: type[BaseModel] | None = None,
 ) -> tuple[types.GenerateContentResponse, str]:
-    for index, model in enumerate(models):
-        try:
-            response = client.models.generate_content(
-                model=model, contents=contents, config=config
+    if not models:
+        raise ValueError("At least one Gemini model must be configured")
+    if deadline is None:
+        deadline = (
+            time.monotonic()
+            + _positive_int_setting("GEMINI_TOTAL_TIMEOUT_MS", 180000) / 1000
+        )
+    timeout_ms = _positive_int_setting("GEMINI_TIMEOUT_MS", 60000)
+    attempts: list[tuple[str, str]] = []
+    candidates = models
+    # Try alternatives before retrying busy models. One delayed second pass is
+    # enough; do not multiply this with hidden SDK retries on every request.
+    for round_index in range(2):
+        retry_models = []
+        for model in candidates:
+            remaining_ms = int((deadline - time.monotonic()) * 1000)
+            if remaining_ms <= 0:
+                logger.warning(
+                    "Gemini analysis time budget exhausted; attempts=%s", attempts
+                )
+                raise ModelsUnavailableError(attempts)
+            started = time.monotonic()
+            logger.info("Gemini attempt: model=%s pass=%s", model, round_index + 1)
+            request_config = config.model_copy(
+                update={
+                    "http_options": types.HttpOptions(
+                        timeout=min(timeout_ms, remaining_ms),
+                        retry_options=types.HttpRetryOptions(attempts=1),
+                    )
+                }
             )
-            return response, model
-        except errors.APIError as error:
-            # Switch only for unavailable models or transient API failures.
-            # Authentication and invalid-request errors need to reach the caller.
-            if error.code not in FALLBACK_STATUS_CODES or index == len(models) - 1:
-                raise
+            try:
+                response = client.models.generate_content(
+                    model=model, contents=contents, config=request_config
+                )
+                if response_model is not None:
+                    response_model.model_validate_json(response.text or "")
+                logger.info(
+                    "Gemini success: model=%s elapsed=%.1fs",
+                    model,
+                    time.monotonic() - started,
+                )
+                return response, model
+            except errors.APIError as error:
+                if error.code not in FALLBACK_STATUS_CODES:
+                    # Do not conceal invalid credentials, billing or bad requests.
+                    logger.error(
+                        "Gemini request rejected: model=%s HTTP=%s", model, error.code
+                    )
+                    raise
+                reason = f"HTTP {error.code}"
+                if error.code != 404:
+                    retry_models.append(model)
+            except TRANSPORT_ERRORS as error:
+                reason = type(error).__name__
+                retry_models.append(model)
+            except ValidationError:
+                # Invalid inference output should advance to the next model.
+                # Keep the second pass reserved for transient provider failures.
+                reason = "invalid structured output"
+            attempts.append((model, reason))
             logger.warning(
-                "Gemini model %s failed (HTTP %s); falling back to %s",
+                "Gemini failed: model=%s reason=%s elapsed=%.1fs; trying remaining fallbacks",
                 model,
-                error.code,
-                models[index + 1],
+                reason,
+                time.monotonic() - started,
             )
-    raise ValueError("At least one Gemini model must be configured")
+        if round_index == 0 and retry_models:
+            delay = 1 + random.random()
+            if time.monotonic() + delay >= deadline:
+                break
+            logger.warning(
+                "Gemini fallbacks exhausted; retrying transient failures once after backoff"
+            )
+            time.sleep(delay)
+            candidates = retry_models
+        else:
+            break
+    logger.warning("Gemini models unavailable; attempts=%s", attempts)
+    raise ModelsUnavailableError(attempts)
 
 
 def analyze_image(image_path: str) -> dict:
@@ -168,20 +253,43 @@ def analyze_image_bytes(image_bytes: bytes) -> dict:
     # Lazy construction keeps offline validation, replay and tests independent of
     # API credentials. The original image is sent only during explicit analysis.
     models = _get_model_candidates()
+    deadline = (
+        time.monotonic()
+        + _positive_int_setting("GEMINI_TOTAL_TIMEOUT_MS", 180000) / 1000
+    )
     with genai.Client(
         api_key=os.getenv("GEMINI_API_KEY"),
         http_options=types.HttpOptions(
-            timeout=int(os.getenv("GEMINI_TIMEOUT_MS", "60000"))
+            timeout=_positive_int_setting("GEMINI_TIMEOUT_MS", 60000),
+            retry_options=types.HttpRetryOptions(attempts=1),
         ),
     ) as client:
-        response, selected_model = _generate_content_with_fallback(
-            client,
-            models=models,
-            contents=[image_part, SCENE_PROMPT],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json", response_schema=SceneAnalysis
-            ),
-        )
+        try:
+            response, selected_model = _generate_content_with_fallback(
+                client,
+                models=models,
+                deadline=deadline,
+                contents=[image_part, SCENE_PROMPT],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", response_schema=SceneAnalysis
+                ),
+                response_model=SceneGeometryInput,
+            )
+        except ModelsUnavailableError as gemini_error:
+            # Load and initialize Groq only after the Gemini analysis attempts
+            # are exhausted. Optional floor refinement never triggers Groq.
+            from .groq_provider import GroqUnavailableError, analyze_with_groq
+
+            logger.warning("Gemini models exhausted; falling back to Groq")
+            try:
+                analysis = analyze_with_groq(image_bytes, mime_type, SCENE_PROMPT)
+            except GroqUnavailableError as groq_error:
+                raise ModelsUnavailableError(
+                    gemini_error.attempts + groq_error.attempts
+                ) from None
+            return SceneGeometryInput(
+                **analysis.model_dump(), image_aspect_ratio=image_aspect
+            ).model_dump()
         result = SceneGeometryInput.model_validate_json(response.text or "")
         if FloorMapping(result.room_landmarks, CANONICAL_ROOM, 1).to_floor is None or (
             result.room_landmarks
@@ -208,6 +316,7 @@ def analyze_image_bytes(image_bytes: bytes) -> dict:
                 refinement, _ = _generate_content_with_fallback(
                     client,
                     models=models[models.index(selected_model) :],
+                    deadline=deadline,
                     contents=[
                         image_part,
                         "Inspect ONLY the room FLOOR geometry. The previous landmarks could not define a usable rectangular floor patch: "

@@ -1,6 +1,7 @@
 import logging
 from typing import cast
 
+from google.genai import errors
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.generics import RetrieveAPIView
@@ -13,7 +14,7 @@ from .models import Scene
 from .schemas import SceneGeometryInput
 from .serializers import ManualOverridesSerializer, SceneSerializer
 from .validators import validate_scene_json
-from .vlm_service import analyze_image_bytes
+from .vlm_service import ModelsUnavailableError, analyze_image_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -77,11 +78,40 @@ class SceneCreateView(APIView):
                 validated_scene_data["debug_info"]["floor_mapping"]["method"],
             )
 
-        except Exception:
+        except Exception as error:
             scene.status = "failed"
 
             scene.save(update_fields=["status"])
 
+            if isinstance(error, ModelsUnavailableError):
+                logger.warning(
+                    "Scene %s AI unavailable; attempts=%s", scene.pk, error.attempts
+                )
+                return Response(
+                    {
+                        "id": scene.pk,
+                        "status": "failed",
+                        "code": "ai_unavailable",
+                        "detail": str(error),
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    headers={"Retry-After": "30"},
+                )
+            if isinstance(error, errors.APIError):
+                # Upstream messages may contain account details. Keep them out
+                # of public responses and log only the provider status code.
+                logger.error(
+                    "Scene %s AI request rejected: HTTP %s", scene.pk, error.code
+                )
+                return Response(
+                    {
+                        "id": scene.pk,
+                        "status": "failed",
+                        "code": "ai_request_failed",
+                        "detail": "The AI service rejected the request. Please check the server's model, API key, and quota settings.",
+                    },
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
             logger.exception("Scene %s analysis/geometry failed", scene.pk)
 
             return Response(

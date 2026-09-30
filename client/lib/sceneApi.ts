@@ -15,7 +15,15 @@ export async function uploadScene(file: File): Promise<SceneResponse> {
   const body = new FormData();
   body.append("image", file);
   const response = await fetch(API, { method: "POST", body });
-  if (!response.ok) throw new Error("Upload failed.");
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    const detail =
+      ["ai_unavailable", "ai_request_failed"].includes(problem?.code) &&
+      typeof problem?.detail === "string"
+        ? problem.detail
+        : "Could not generate the scene. Please try again.";
+    throw new Error(detail);
+  }
   return response.json();
 }
 

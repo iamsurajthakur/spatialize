@@ -126,17 +126,23 @@ For a fresh setup, run `cp .env.example .env` from `server/`. If you already hav
 
 ```dotenv
 GEMINI_API_KEY=your_api_key_here
-GEMINI_MODEL=your_available_image_capable_model_id
-GEMINI_FALLBACK_MODELS=
+GEMINI_MODEL=gemini-3.8-flash
+GEMINI_FALLBACK_MODELS=gemini-3.5-flash-lite,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash
+GROQ_API_KEY=
 ```
 
 | Variable | Behavior |
 | --- | --- |
 | `GEMINI_API_KEY` | Used by the backend when analyzing an image. |
 | `GEMINI_MODEL` | Primary model ID. If absent or blank, the code uses `gemini-3.8-flash`. |
-| `GEMINI_FALLBACK_MODELS` | Comma-separated model IDs to try in order. An explicitly empty value disables model switching. If omitted, defaults are drawn from the remaining configured sequence: `gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`. |
+| `GEMINI_FALLBACK_MODELS` | Comma-separated model IDs to try in order. An explicitly empty value disables model switching. If omitted, all other defaults are tried in order: `gemini-3.8-flash`, `gemini-3.5-flash-lite`, `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`. |
+| `GROQ_API_KEY` | Optional backend-only key for the final `qwen/qwen3.8-27b` fallback after Gemini attempts are exhausted. |
 
-The names above describe the defaults in the source code; model availability depends on your API access. Set an available model explicitly. Fallbacks apply to selected unavailable/transient API responses (`404`, `408`, `429`, `500`, `502`, `503`, `504`). Authentication errors, invalid requests, and invalid structured output fail the initial analysis rather than triggering model switching.
+The names above describe the defaults in the source code; model availability depends on your API access. Set an available model explicitly. Fallbacks apply to selected unavailable/transient API responses (`404`, `408`, `429`, `500`, `502`, `503`, `504`), transport timeouts/connection failures, and invalid structured output. Alternatives are tried before one delayed retry pass for transient failures; missing models (`404`) and invalid output are not retried. `GEMINI_TIMEOUT_MS` defaults to 60000 per request, and `GEMINI_TOTAL_TIMEOUT_MS` defaults to 180000 shared across model attempts, backoff, and optional refinement. SDK retries are disabled to avoid multiplying calls. Authentication errors and invalid requests fail the initial analysis rather than triggering model switching.
+
+Gemini remains primary. Only after its analysis attempts are exhausted does the backend initialize Groq, if `GROQ_API_KEY` is configured. Groq reuses the same prompt and image, requests strict JSON Schema output, and validates the result with the existing `SceneAnalysis` model. Temporary failures get up to three attempts with exponential backoff and an additional 30-second budget. Missing Groq credentials do not affect successful Gemini requests. If neither provider succeeds, the existing HTTP 503 response is returned. Set the optional key in the backend deployment environment; never use a `NEXT_PUBLIC_` variable for it.
+
+Model attempts, failures, and the selected model are logged by `scenes.vlm_service`. To explicitly probe image-input and JSON-output support for every configured model (uses API quota), run `python manage.py check_ai_models` from `server/` with the virtual environment active. Use `--model gemini-3.5-flash-lite` to probe only one model. Availability and quota can differ by account and change over time. Exhausted fallbacks return HTTP 503 with a retry message; rejected API requests return HTTP 502 with a configuration message. Restart the backend after changing `.env`.
 
 Start the backend from `server/` with the virtual environment active:
 

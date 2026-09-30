@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX, useEffect, useRef, useState } from "react";
+import { JSX, useEffect, useRef, useState, type CSSProperties } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { ManualOverrides, SceneData } from "@/lib/SceneData";
@@ -14,6 +14,9 @@ import {
 } from "@/lib/sceneEditor";
 import { useManualOverrides } from "@/lib/useManualOverrides";
 import SceneEditPanel from "./SceneEditPanel";
+import SourcePanel from "./SourcePanel";
+import PlacementInspector from "./PlacementInspector";
+import "./viewer.css";
 
 const EMPTY_OVERRIDES: ManualOverrides = {};
 
@@ -27,7 +30,14 @@ const VIEW_OPTIONS: { id: ViewMode; label: string; icon: JSX.Element }[] = [
     id: "source",
     label: "Source",
     icon: (
-      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4">
+      <svg
+        viewBox="0 0 16 16"
+        width="14"
+        height="14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      >
         <rect x="2" y="3" width="12" height="10" rx="1.2" />
         <circle cx="5.6" cy="6.4" r="1" />
         <path d="M2.8 11.5 6 8.4a1 1 0 0 1 1.4 0L9 10l1.4-1.4a1 1 0 0 1 1.4 0l1.4 1.4" />
@@ -38,7 +48,15 @@ const VIEW_OPTIONS: { id: ViewMode; label: string; icon: JSX.Element }[] = [
     id: "overview",
     label: "Overview",
     icon: (
-      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
+      <svg
+        viewBox="0 0 16 16"
+        width="14"
+        height="14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      >
         <path d="M8 1.6 14 5v6L8 14.4 2 11V5z" />
         <path d="M2 5l6 3.4L14 5M8 8.4v6" />
       </svg>
@@ -48,7 +66,14 @@ const VIEW_OPTIONS: { id: ViewMode; label: string; icon: JSX.Element }[] = [
     id: "top",
     label: "Top",
     icon: (
-      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4">
+      <svg
+        viewBox="0 0 16 16"
+        width="14"
+        height="14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      >
         <rect x="2.5" y="2.5" width="11" height="11" rx="1.2" />
         <circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" />
       </svg>
@@ -56,19 +81,19 @@ const VIEW_OPTIONS: { id: ViewMode; label: string; icon: JSX.Element }[] = [
   },
 ];
 
-function StatusDot({ status }: { status: "idle" | "editing" | "saving" | "error" | "saved" | string }) {
+function StatusDot({
+  status,
+}: {
+  status: "idle" | "editing" | "saving" | "error" | "saved" | string;
+}) {
   const color =
-    status === "error" ? "#F87171" : status === "saving" || status === "editing" ? ACCENT : "#4ADE80";
+    status === "error"
+      ? "#F87171"
+      : status === "saving" || status === "editing"
+        ? ACCENT
+        : "#4ADE80";
   return (
-    <span className="relative flex h-1.5 w-1.5">
-      {status === "saving" && (
-        <span
-          className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
-          style={{ backgroundColor: color }}
-        />
-      )}
-      <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
-    </span>
+    <span className="viewer-status-dot" style={{ backgroundColor: color }} aria-hidden="true" />
   );
 }
 
@@ -84,6 +109,10 @@ export default function SceneViewer({
   sourceImageUrl?: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const comparisonRef = useRef<HTMLDivElement>(null);
+  const detailsButtonRef = useRef<HTMLButtonElement>(null);
+  const resetCameraRef = useRef<(() => void) | null>(null);
+  const [sourceWidth, setSourceWidth] = useState(36);
   const [mode, setMode] = useState<ViewMode>("source");
   const [showDebug, setShowDebug] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -92,7 +121,15 @@ export default function SceneViewer({
   const [selection, setSelection] = useState<Selection>(null);
   const [editMode, setEditMode] = useState<EditMode>("translate");
   const { overrides, status, update, save } = useManualOverrides(sceneId, manualOverrides);
-  const objectDebug = sceneData.debug_info?.objects;
+  const inspectedId = selection?.id ?? selected;
+  const inspect = (id: string) => {
+    setSelected(id);
+    editorRef.current?.select(id);
+  };
+  const closeInspector = () => {
+    setShowDebug(false);
+    detailsButtonRef.current?.focus();
+  };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -110,6 +147,8 @@ export default function SceneViewer({
     const controls = new OrbitControls(camera);
     controls.target.copy(target);
     controls.enableDamping = true;
+    controls.saveState();
+    resetCameraRef.current = () => controls.reset();
     const room = buildScene(scene, sceneData);
     const editor = sceneId
       ? createSceneEditor({
@@ -123,6 +162,7 @@ export default function SceneViewer({
           onSelect: (value) => {
             selectionRef.current = value?.id ?? null;
             setSelection(value);
+            setSelected(value?.id ?? null);
           },
           onChange: update,
           onCommit: save,
@@ -137,6 +177,7 @@ export default function SceneViewer({
     const resize = () => {
       const width = container.clientWidth,
         height = container.clientHeight;
+      if (!width || !height) return;
       renderer.setSize(width, height);
       if (mode === "source" && sceneData.camera) {
         // Fit the source aspect inside the viewport without stretching its camera.
@@ -172,6 +213,7 @@ export default function SceneViewer({
       observer.disconnect();
       editor?.dispose();
       editorRef.current = null;
+      resetCameraRef.current = null;
       controls.dispose();
       disposeScene(scene);
       renderer.dispose();
@@ -189,223 +231,200 @@ export default function SceneViewer({
           : "Saved";
 
   return (
-    <div className="h-full w-full flex flex-col pt-20 bg-[#101114] text-white">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.07] bg-[#17181B]/95 backdrop-blur">
-        <div className="flex items-center gap-0.5 rounded-md bg-white/[0.04] p-0.5">
-          {VIEW_OPTIONS.map(({ id, label, icon }) => {
-            const active = mode === id;
-            return (
-              <button
-                key={id}
-                onClick={() => setMode(id)}
-                aria-pressed={active}
-                className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 text-[13px] leading-none transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40 ${
-                  active ? "bg-white/[0.09] text-white" : "text-white/45 hover:text-white/75"
-                }`}
-                style={active ? { color: "#F0D9B5" } : undefined}
-              >
-                <span style={active ? { color: ACCENT } : undefined}>{icon}</span>
-                {label}
-              </button>
-            );
-          })}
+    <div className="viewer-body">
+      <div className="viewer-toolbar" aria-label="Viewer controls">
+        <div className="viewer-view-switcher" role="group" aria-label="Camera view">
+          {VIEW_OPTIONS.map(({ id, label, icon }) => (
+            <button
+              key={id}
+              onClick={() => setMode(id)}
+              aria-pressed={mode === id}
+              title={
+                id === "source"
+                  ? "Match the source image camera"
+                  : id === "top"
+                    ? "View the room from above"
+                    : "View the room in perspective"
+              }
+            >
+              <span aria-hidden="true">{icon}</span>
+              {label}
+            </button>
+          ))}
         </div>
-
-        <div className="ml-auto flex items-center gap-3">
+        <div className="viewer-toolbar-actions">
+          <button
+            className="viewer-icon-button viewer-reset-camera"
+            onClick={() => resetCameraRef.current?.()}
+            aria-label="Reset camera"
+            title="Reset camera to the current view"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 6a5.4 5.4 0 1 1-.2 4M3 2.5V6h3.5" />
+            </svg>
+          </button>
           {sceneId && (
-            <div className="flex items-center gap-1.5 text-[12px] text-white/50" role="status" aria-live="polite">
+            <div className="viewer-save-status" role="status" aria-live="polite">
               <StatusDot status={status} />
               <span>{statusLabel}</span>
-              {status === "error" && (
-                <button
-                  onClick={() => void save()}
-                  className="ml-1 underline decoration-white/30 underline-offset-2 hover:text-white/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40 rounded"
-                >
-                  Retry
-                </button>
-              )}
+              {status === "error" && <button onClick={() => void save()}>Retry</button>}
             </div>
           )}
-
-          {objectDebug && (
-            <>
-              <div className="h-4 w-px bg-white/10" />
-              <button
-                onClick={() => setShowDebug(!showDebug)}
-                aria-pressed={showDebug}
-                className={`flex items-center gap-1.5 rounded px-2 py-1.5 text-[13px] leading-none transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40 ${
-                  showDebug ? "text-white bg-white/[0.07]" : "text-white/45 hover:text-white/75"
-                }`}
-              >
-                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.4">
-                  <path d="M2 5.5 8 2l6 3.5v5L8 14 2 10.5z" />
-                  <path d="M2 5.5 8 9l6-3.5M8 9v5" />
-                </svg>
-                Placement details
-              </button>
-            </>
-          )}
+          <span className="viewer-toolbar-divider" aria-hidden="true" />
+          <button
+            ref={detailsButtonRef}
+            className="viewer-details-toggle"
+            onClick={() => setShowDebug(!showDebug)}
+            aria-expanded={showDebug}
+            aria-controls="placement-inspector"
+            aria-label="Placement details"
+            title="Placement details"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              aria-hidden="true"
+            >
+              <rect x="2" y="2.5" width="12" height="11" rx="1" />
+              <path d="M10 2.5v11M12 5h.1M12 8h.1M12 11h.1" />
+            </svg>
+            <span>Placement details</span>
+          </button>
         </div>
       </div>
-
-      <div className="flex flex-1 min-h-0 flex-col md:flex-row">
-        {sourceImageUrl && (
-          <div className="relative flex items-center justify-center md:w-2/5 h-1/3 md:h-full bg-[#0B0C0E] border-b md:border-b-0 md:border-r border-white/[0.06]">
-            <div className="relative w-full">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={sourceImageUrl}
-                alt="Source room"
-                className="w-full max-h-full object-contain"
+      <div className="viewer-workspace">
+        <div
+          ref={comparisonRef}
+          className="viewer-comparison"
+          style={{ "--source-width": `${sourceWidth}%` } as CSSProperties}
+        >
+          {sourceImageUrl && (
+            <>
+              <SourcePanel
+                url={sourceImageUrl}
+                sceneData={sceneData}
+                showDetails={showDebug}
+                selectedId={inspectedId}
+                onInspect={inspect}
               />
-              <span className="pointer-events-none absolute left-2.5 bottom-2.5 rounded bg-black/50 px-1.5 py-0.5 font-mono text-[10px] tracking-tight text-white/60">
-                source photo
+              <div
+                className="viewer-splitter"
+                role="separator"
+                tabIndex={0}
+                aria-label="Resize source comparison"
+                aria-orientation="vertical"
+                aria-valuenow={Math.round(sourceWidth)}
+                aria-valuemin={24}
+                aria-valuemax={45}
+                aria-valuetext={`${Math.round(sourceWidth)} percent source image`}
+                title="Drag to resize · Arrow keys adjust · Double-click to reset"
+                onPointerDown={(event) => {
+                  if (event.button === 0) {
+                    event.preventDefault();
+                    event.currentTarget.focus();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                  }
+                }}
+                onPointerMove={(event) => {
+                  if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                  const bounds = comparisonRef.current?.getBoundingClientRect();
+                  if (bounds?.width)
+                    setSourceWidth(
+                      Math.max(
+                        24,
+                        Math.min(45, ((event.clientX - bounds.left) / bounds.width) * 100),
+                      ),
+                    );
+                }}
+                onPointerUp={(event) => {
+                  if (event.currentTarget.hasPointerCapture(event.pointerId))
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                }}
+                onDoubleClick={() => setSourceWidth(36)}
+                onKeyDown={(event) => {
+                  if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+                    event.preventDefault();
+                    setSourceWidth((width) =>
+                      event.key === "Home"
+                        ? 24
+                        : event.key === "End"
+                          ? 45
+                          : Math.max(
+                              24,
+                              Math.min(45, width + (event.key === "ArrowRight" ? 2 : -2)),
+                            ),
+                    );
+                  }
+                }}
+              >
+                <span />
+              </div>
+            </>
+          )}
+          <section className="viewer-scene" aria-label="Interactive 3D scene">
+            <div className="viewer-panel-heading">
+              <h2>3D scene</h2>
+              <span className={selection ? "viewer-active-object" : ""}>
+                {selection ? selection.id : `${sceneData.objects.length} objects`}
               </span>
-              {showDebug && objectDebug && (
-                <svg
-                  viewBox="0 0 1 1"
-                  preserveAspectRatio="none"
-                  className="absolute inset-0 w-full h-full"
-                >
-                  {sceneData.debug_info?.floor_mapping.image_quad && (
-                    <polygon
-                      points={sceneData.debug_info.floor_mapping.image_quad
-                        .map((point) => point.join(","))
-                        .join(" ")}
-                      fill="none"
-                      stroke="#38bdf8"
-                      strokeWidth="0.003"
-                    />
-                  )}
-                  {Object.entries(objectDebug).map(([id, debug]) => (
-                    <g key={id} onClick={() => setSelected(id)} style={{ cursor: "pointer" }}>
-                      {debug.floor_contact && (
-                        <circle
-                          cx={debug.floor_contact.x}
-                          cy={debug.floor_contact.y}
-                          r="0.007"
-                          fill="#fbbf24"
-                        >
-                          <title>{id}: input anchor</title>
-                        </circle>
-                      )}
-                      {debug.reprojected_floor_contact && (
-                        <>
-                          {debug.floor_contact && (
-                            <line
-                              x1={debug.floor_contact.x}
-                              y1={debug.floor_contact.y}
-                              x2={debug.reprojected_floor_contact.x}
-                              y2={debug.reprojected_floor_contact.y}
-                              stroke="#f87171"
-                              strokeWidth="0.002"
-                            />
-                          )}
-                          <circle
-                            cx={debug.reprojected_floor_contact.x}
-                            cy={debug.reprojected_floor_contact.y}
-                            r="0.005"
-                            fill="#4ade80"
-                          >
-                            <title>{id}: final anchor</title>
-                          </circle>
-                        </>
-                      )}
-                    </g>
-                  ))}
-                </svg>
+            </div>
+            <div className="viewer-canvas-area">
+              <div ref={containerRef} className="viewer-canvas" />
+              {sceneId && selection && !showDebug && (
+                <SceneEditPanel
+                  selection={selection}
+                  mode={editMode}
+                  onMode={(value) => editorRef.current?.setMode(value)}
+                  onEdit={(value) => editorRef.current?.edit(value)}
+                  onReset={() => editorRef.current?.reset()}
+                  onClose={() => editorRef.current?.select(null)}
+                />
+              )}
+              {sceneId && !selection && (
+                <div className="viewer-hints" aria-label="Scene interaction hints">
+                  <span>Click furniture to move or rotate</span>
+                  <span>Drag empty space to orbit</span>
+                </div>
               )}
             </div>
-          </div>
-        )}
-
-        <div className="relative flex-1 min-h-0 min-w-0">
-          <div ref={containerRef} className="absolute inset-0" />
-
-          {sceneId && selection && (
-            <SceneEditPanel
-              selection={selection}
-              mode={editMode}
-              onMode={(value) => editorRef.current?.setMode(value)}
-              onEdit={(value) => editorRef.current?.edit(value)}
-              onReset={() => editorRef.current?.reset()}
-              onClose={() => editorRef.current?.select(null)}
-            />
-          )}
-
-          {sceneId && !selection && (
-            <div className="pointer-events-none absolute bottom-4 inset-x-0 flex justify-center">
-              <div className="flex items-center gap-2.5 rounded-full border border-white/10 bg-black/40 backdrop-blur px-3 py-1.5 text-[11px] text-white/60">
-                <span className="flex items-center gap-1.5">
-                  <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.4">
-                    <path d="M4 2v9.5a.9.9 0 0 0 1.5.7l1.6-1.4 1 3 1.7-.7-1-3h2.2z" />
-                  </svg>
-                  Click furniture to move or rotate
-                </span>
-                <span className="h-3 w-px bg-white/15" />
-                <span className="flex items-center gap-1.5">
-                  <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.4">
-                    <path d="M8 2a6 6 0 1 1-5.2 3" />
-                    <path d="M2 2.5v3h3" />
-                  </svg>
-                  Drag empty space to orbit
-                </span>
-              </div>
-            </div>
-          )}
+          </section>
         </div>
-
-        {showDebug && objectDebug && (
-          <aside className="w-full md:w-80 max-h-80 md:max-h-full overflow-auto bg-[#17181B] border-t md:border-t-0 md:border-l border-white/[0.07] p-4 text-xs">
-            <h2 className="text-[13px] font-medium text-white/90 mb-3">Placement details</h2>
-
-            <div className="flex flex-col gap-1.5 mb-3 text-white/60">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#fbbf24" }} />
-                Input floor anchor, from the source photo
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#4ade80" }} />
-                Final placement, projected onto the floor
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between rounded-md border border-white/[0.07] bg-white/[0.03] px-2.5 py-1.5 mb-3 font-mono text-[11px] text-white/50">
-              <span>{sceneData.debug_info?.floor_mapping.method}</span>
-              <span>camera · {sceneData.camera?.method}</span>
-            </div>
-
-            <div className="relative mb-3">
-              <select
-                aria-label="Inspect object"
-                value={selected ?? Object.keys(objectDebug)[0] ?? ""}
-                onChange={(e) => setSelected(e.target.value)}
-                className="w-full appearance-none rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1.5 pr-7 text-[12px] text-white/85 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40"
-              >
-                {Object.keys(objectDebug).map((id) => (
-                  <option key={id} value={id} className="bg-[#17181B]">
-                    {id}
-                  </option>
-                ))}
-              </select>
-              <svg
-                viewBox="0 0 16 16"
-                width="12"
-                height="12"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40"
-              >
-                <path d="M4 6l4 4 4-4" />
-              </svg>
-            </div>
-
-            <pre className="whitespace-pre-wrap break-words rounded-md border border-white/[0.07] bg-black/30 p-3 font-mono text-[11px] leading-relaxed text-white/70">
-              {JSON.stringify(objectDebug[selected ?? Object.keys(objectDebug)[0]], null, 2)}
-            </pre>
-          </aside>
+        {showDebug && (
+          <PlacementInspector
+            sceneData={sceneData}
+            selectedId={inspectedId}
+            selection={selection}
+            overrides={overrides.current}
+            onInspect={inspect}
+            onClose={closeInspector}
+            editControls={
+              sceneId && selection ? (
+                <SceneEditPanel
+                  embedded
+                  selection={selection}
+                  mode={editMode}
+                  onMode={(value) => editorRef.current?.setMode(value)}
+                  onEdit={(value) => editorRef.current?.edit(value)}
+                  onReset={() => editorRef.current?.reset()}
+                  onClose={() => editorRef.current?.select(null)}
+                />
+              ) : undefined
+            }
+          />
         )}
       </div>
     </div>

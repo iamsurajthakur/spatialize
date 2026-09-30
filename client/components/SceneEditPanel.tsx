@@ -8,6 +8,7 @@ export default function SceneEditPanel({
   onEdit,
   onReset,
   onClose,
+  embedded = false,
 }: {
   selection: NonNullable<Selection>;
   mode: EditMode;
@@ -15,41 +16,50 @@ export default function SceneEditPanel({
   onEdit: (transform: ManualTransform) => void;
   onReset: () => void;
   onClose: () => void;
+  embedded?: boolean;
 }) {
   return (
     <section
       aria-label="Edit selected object"
-      className="absolute top-3 left-3 w-56 rounded-xl border border-white/15 bg-zinc-900/95 p-3 text-xs text-zinc-200 shadow-xl"
+      className={`viewer-edit-panel${embedded ? " is-embedded" : ""}`}
     >
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <div className="min-w-0">
-          <p className="font-semibold text-sm capitalize">{selection.type}</p>
-          <p className="truncate text-zinc-400">{selection.id}</p>
+      {!embedded && (
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="min-w-0">
+            <p className="font-semibold text-sm capitalize">{selection.type}</p>
+            <p className="truncate text-zinc-400">{selection.id}</p>
+          </div>
+          <button aria-label="Deselect object" onClick={onClose} className="viewer-icon-button">
+            ×
+          </button>
         </div>
-        <button
-          aria-label="Deselect object"
-          onClick={onClose}
-          className="px-2 py-1 rounded bg-white/10"
-        >
-          ×
-        </button>
-      </div>
-      <div className="flex gap-2 mb-3">
+      )}
+      <div className="viewer-edit-modes">
         {(["translate", "rotate"] as const).map((value) => (
           <button
             key={value}
             aria-pressed={mode === value}
             onClick={() => onMode(value)}
-            className={`flex-1 rounded px-2 py-2 ${mode === value ? "bg-sky-600 text-white" : "bg-white/10"}`}
+            className="viewer-edit-mode"
           >
             {value === "translate" ? "Move (G)" : "Rotate (R)"}
           </button>
         ))}
+        {embedded && (
+          <button
+            aria-label="Deselect object"
+            title="Deselect object"
+            onClick={onClose}
+            className="viewer-icon-button"
+          >
+            ×
+          </button>
+        )}
       </div>
       {(
         [
-          ["x", "X position (m)"],
-          ["z", "Z position (m)"],
+          ["x", "X position"],
+          ["z", "Z position"],
           ["rotation_y", "Y rotation (°)"],
         ] as const
       ).map(([field, label]) => (
@@ -70,15 +80,15 @@ export default function SceneEditPanel({
             onKeyDown={(event) => {
               if (event.key === "Enter") event.currentTarget.blur();
             }}
-            className="w-24 rounded bg-zinc-800 px-2 py-1.5 border border-white/10"
+            className="viewer-edit-input"
           />
         </label>
       ))}
-      <button onClick={onReset} className="w-full rounded bg-white/10 px-3 py-2 mt-1">
+      <button onClick={onReset} className="viewer-reset-object">
         Reset object
       </button>
-      <p className="mt-2 text-zinc-400">
-        Drag the arrows or floor handle. Edits save automatically. Esc deselects.
+      <p className="viewer-property-note mt-3">
+        Drag the arrows or floor handle. Edits save automatically.{!embedded && " Esc deselects."}
       </p>
     </section>
   );
